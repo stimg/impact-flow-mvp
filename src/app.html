@@ -7,7 +7,7 @@
 		<link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
 		<link rel="shortcut icon" href="/static/favicon.ico" />
 		<link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png" />
-		<meta name="apple-mobile-web-app-title" content="Open WebUI" />
+		<meta name="apple-mobile-web-app-title" content="Impact Flow" />
 
 		<link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
 		<meta
@@ -16,11 +16,11 @@
 		/>
 		<meta name="theme-color" content="#171717" />
 		<meta name="robots" content="noindex,nofollow" />
-		<meta name="description" content="Open WebUI" />
+		<meta name="description" content="Impact Flow" />
 		<link
 			rel="search"
 			type="application/opensearchdescription+xml"
-			title="Open WebUI"
+			title="Impact Flow"
 			href="/opensearch.xml"
 		/>
 		<script src="/static/loader.js" defer></script>
@@ -101,7 +101,7 @@
 			})();
 		</script>
 
-		<title>Open WebUI</title>
+		<title>Impact Flow</title>
 
 		%sveltekit.head%
 	</head>
@@ -121,6 +121,7 @@
 
 			<img
 				id="logo"
+				alt="logo"
 				style="
 					position: absolute;
 					width: auto;
@@ -149,6 +150,7 @@
 				<img
 					id="logo-her"
 					style="width: auto; height: 13rem"
+					alt="logo-her"
 					src="/static/splash.png"
 					class="animate-pulse-fast"
 				/>
@@ -170,7 +172,7 @@
 						id="progress-bar"
 						style="
 							position: absolute;
-							width: 0%;
+							width: 0;
 							height: 0.75rem;
 							border-radius: 9999px;
 							background-color: #fff;
@@ -187,7 +189,7 @@
 	</body>
 </html>
 
-<style type="text/css" nonce="">
+<style nonce="">
 	html {
 		overflow-y: hidden !important;
 	}

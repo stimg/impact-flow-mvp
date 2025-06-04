@@ -1,9 +1,9 @@
 <script lang="ts">
 	import Fuse from 'fuse.js';
 	import Bolt from '$lib/components/icons/Bolt.svelte';
-	import { onMount, getContext, createEventDispatcher } from 'svelte';
-	import { settings, WEBUI_NAME } from '$lib/stores';
-	import { WEBUI_VERSION } from '$lib/constants';
+	import { /*onMount,*/ getContext, createEventDispatcher } from 'svelte';
+	// import { settings, WEBUI_NAME } from '$lib/stores';
+	// import { WEBUI_VERSION } from '$lib/constants';
 
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
@@ -71,13 +71,13 @@
 	{:else}
 		<!-- Keine Vorschläge -->
 
-		<div
-			class="flex w-full {$settings?.landingPageMode === 'chat'
-				? ' -mt-1'
-				: 'text-center items-center justify-center'}  self-start text-gray-600 dark:text-gray-400"
-		>
-			{$WEBUI_NAME} ‧ v{WEBUI_VERSION}
-		</div>
+<!--		<div-->
+<!--			class="flex w-full {$settings?.landingPageMode === 'chat'-->
+<!--				? ' -mt-1'-->
+<!--				: 'text-center items-center justify-center'}  self-start text-gray-600 dark:text-gray-400"-->
+<!--		>-->
+<!--			{$WEBUI_NAME} ‧ {WEBUI_VERSION}-->
+<!--		</div>-->
 	{/if}
 </div>
 
@@ -108,9 +108,9 @@
 							>
 								{prompt.content}
 							</div>
-							<div class="text-xs text-gray-600 dark:text-gray-400 font-normal line-clamp-1">
-								{$i18n.t('Prompt')}
-							</div>
+						<div class="text-xs text-gray-600 dark:text-gray-400 font-normal line-clamp-1">
+							{$i18n.t('Prompt')}
+						</div>
 						{/if}
 					</div>
 				</button>
