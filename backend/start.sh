@@ -34,6 +34,7 @@ fi
 if [[ "${USE_OLLAMA_DOCKER,,}" == "true" ]]; then
     echo "USE_OLLAMA is set to true, starting ollama serve."
     ollama serve &
+    ollama run gemma:2b
 fi
 
 if [[ "${USE_CUDA_DOCKER,,}" == "true" ]]; then
