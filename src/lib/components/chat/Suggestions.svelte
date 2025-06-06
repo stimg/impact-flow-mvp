@@ -64,25 +64,21 @@
 	}
 </script>
 
-<div class="mb-1 flex gap-1 text-xs font-medium items-center text-gray-600 dark:text-gray-400">
+<div class="mb-3 flex gap-1 text-xs font-medium items-center text-gray-600 dark:text-gray-400">
 	{#if filteredPrompts.length > 0}
 		<Bolt />
 		{$i18n.t('Suggested')}
 	{/if}
 </div>
 
-<div class="h-40 w-full">
+<div class="w-full mb-5">
 	{#if filteredPrompts.length > 0}
-		<div class="max-h-40 overflow-auto scrollbar-none items-start {className}">
+		<div class="grid grid-cols-2 gap-3 max-h-35 overflow-auto scrollbar-none {className}">
 			{#each filteredPrompts as prompt, idx (prompt.id || prompt.content)}
-				<button
-					class="waterfall flex flex-col flex-1 shrink-0 w-full justify-between
-				       px-3 py-2 rounded-xl bg-transparent hover:bg-black/5
-				       dark:hover:bg-white/5 transition group"
-					style="animation-delay: {idx * 60}ms"
-					on:click={() => dispatch('select', prompt.content)}
-				>
-					<div class="flex flex-col text-left">
+				<button class="waterfall w-auto px-3 py-2 rounded-md border bg-gray-50 border-gray-200 dark:bg-gray-850 dark:border-gray-800
+				hover:bg-gray-100 dark:hover:bg-black/5 dark:hover:bg-white/5 transition group"
+								style="animation-delay: {idx * 60}ms" on:click={() => dispatch('select', prompt.content)}>
+					<div class="text-left">
 						{#if prompt.title && prompt.title[0] !== ''}
 							<div
 								class="font-medium dark:text-gray-300 dark:group-hover:text-gray-200 transition line-clamp-1"

@@ -13,23 +13,21 @@
 		title: '',
 		content: '',
 		url: '',
-		dismissable: true,
+		dismissible: true,
 		timestamp: Math.floor(Date.now() / 1000)
 	};
-	export let className = 'mx-4';
-
 	export let dismissed = false;
 
 	let mounted = false;
 
 	const classNames: Record<string, string> = {
-		info: 'bg-blue-500/20 text-blue-700 dark:text-blue-200 ',
-		success: 'bg-green-500/20 text-green-700 dark:text-green-200',
-		warning: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-200',
-		error: 'bg-red-500/20 text-red-700 dark:text-red-200'
+		info: 'bg-indigo-500 dark:bg-indigo-800 text-white  border-indigo-800 dark:border-indigo-500',
+		success: 'bg-teal-500 dark:bg-teal-800 text-white border-teal-800 dark:border-teal-500',
+		warning: 'bg-amber-500 dark:bg-amber-800 text-white border-amber-800 dark:border-amber-500',
+		error: 'bg-rose-500 dark:bg-rose-800 text-white border-rose-800 dark:border-rose-500'
 	};
 
-	const dismiss = (id) => {
+	const dismiss = (id: string) => {
 		dismissed = true;
 		dispatch('dismiss', id);
 	};
@@ -42,18 +40,12 @@
 {#if !dismissed}
 	{#if mounted}
 		<div
-			class="{className} top-0 left-0 right-0 p-2 px-3 flex justify-center items-center relative rounded-xl border border-gray-100 dark:border-gray-850 text-gray-800 dark:text-gary-100 bg-white dark:bg-gray-900 backdrop-blur-xl z-30"
+			class="{classNames[banner.type] ?? classNames['info']} top-3 left-0 right-0 p-2 px-3 mx-5
+			 flex justify-center items-center relative rounded-md border backdrop-blur-xl z-30"
 			transition:fade={{ delay: 100, duration: 300 }}
 		>
-			<div class=" flex flex-col md:flex-row md:items-center flex-1 text-sm w-fit gap-1.5">
+			<div class=" flex flex-col md:flex-row md:items-center flex-1 text-sm w-fit">
 				<div class="flex justify-between self-start">
-					<div
-						class=" text-xs font-bold {classNames[banner.type] ??
-							classNames['info']}  w-fit px-2 rounded-sm uppercase line-clamp-1 mr-0.5"
-					>
-						{banner.type}
-					</div>
-
 					{#if banner.url}
 						<div class="flex md:hidden group w-fit md:items-center">
 							<a
@@ -83,7 +75,7 @@
 					{/if}
 				</div>
 
-				<div class="flex-1 text-xs text-gray-700 dark:text-white">
+				<div class="flex-1 text-sm">
 					{@html marked.parse(DOMPurify.sanitize(banner.content))}
 				</div>
 			</div>
@@ -119,7 +111,7 @@
 						on:click={() => {
 							dismiss(banner.id);
 						}}
-						class="  -mt-1 -mb-2 -translate-y-[1px] ml-1.5 mr-1 text-gray-400 dark:hover:text-white"
+						class="-mt-1 -mb-2 translate-y-[1px] ml-1.5 mr-1 text-white hover:text-red"
 						>&times;</button
 					>
 				{/if}

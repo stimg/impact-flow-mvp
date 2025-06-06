@@ -601,9 +601,10 @@
 								dispatch('submit', prompt);
 							}}
 						>
-							<div
-								class="flex-1 flex flex-col relative w-full shadow-lg rounded-3xl border border-gray-50 dark:border-gray-850 hover:border-gray-100 focus-within:border-gray-100 hover:dark:border-gray-800 focus-within:dark:border-gray-800 transition px-1 bg-white/90 dark:bg-gray-400/5 dark:text-gray-100"
-								dir={$settings?.chatDirection ?? 'auto'}
+							<div class="flex-1 flex flex-col relative w-full shadow-lg rounded-md border border-gray-50
+							dark:border-gray-850 hover:border-gray-100 focus-within:border-gray-100 hover:dark:border-gray-800
+							focus-within:dark:border-gray-800 transition px-1 bg-white/90 dark:bg-gray-400/5 dark:text-gray-100"
+									 dir={$settings?.chatDirection ?? 'auto'}
 							>
 								{#if files.length > 0}
 									<div class="mx-2 mt-2.5 -mb-1 flex items-center flex-wrap gap-2">
@@ -701,7 +702,8 @@
 								<div class="px-2.5">
 									{#if $settings?.richTextInput ?? true}
 										<div
-											class="scrollbar-hidden rtl:text-right ltr:text-left bg-transparent dark:text-gray-100 outline-hidden w-full pt-2.5 pb-[5px] px-1 resize-none h-fit max-h-80 overflow-auto"
+											class="scrollbar-hidden rtl:text-right ltr:text-left bg-transparent dark:text-gray-100
+											outline-hidden w-full pt-2.5 pb-[5px] px-1 resize-none h-fit max-h-80 overflow-auto"
 											id="chat-input-container"
 										>
 											<RichTextInput
@@ -923,7 +925,7 @@
 											id="chat-input"
 											dir={$settings?.chatDirection ?? 'auto'}
 											bind:this={chatInputElement}
-											class="scrollbar-hidden bg-transparent dark:text-gray-200 outline-hidden w-full pt-3 px-1 resize-none"
+											class="scrollbar-hidden bg-transparent dark:text-gray-200 outline-hidden w-full pt-3 px-1 resize-none text-xs"
 											placeholder={placeholder ? placeholder : $i18n.t('Send a Message')}
 											bind:value={prompt}
 											on:compositionstart={() => (isComposing = true)}

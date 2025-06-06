@@ -389,7 +389,7 @@
 	};
 </script>
 
-<div class={className}>
+<div class='{className} @md:max-w-3xl w-full'>
 	{#if Object.keys(history?.messages ?? {}).length == 0}
 		<ChatPlaceholder
 			modelIds={selectedModels}

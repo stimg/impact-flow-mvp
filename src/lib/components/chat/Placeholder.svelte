@@ -17,6 +17,8 @@
 	import MessageInput from './MessageInput.svelte';
 
 	const i18n = getContext('i18n');
+	const nameRegex = /^(.+?)(?=\s+(?:von(?:\s+(?:der|den|dem))?|van(?:\s+(?:der|den))?|zu|zur|zum|vom|de|del|du)\b|\s+\S+$)/;
+	const username = ($user?.name || 'Gast').match(nameRegex)?.[1] || '';
 
 	export let transparentBackground = false;
 
@@ -104,7 +106,7 @@
 	{/if}
 
 	<div
-		class="w-full text-3xl text-gray-800 dark:text-gray-100 text-center flex items-center gap-4 font-primary"
+		class="w-full text-gray-800 dark:text-gray-100 text-center flex items-center gap-4 font-primary"
 	>
 		<div class="w-full flex flex-col justify-center items-center">
 			<div class="flex flex-row justify-center gap-3 @sm:gap-3.5 w-fit px-5">
@@ -142,7 +144,7 @@
 					{#if models[selectedModelIdx]?.name}
 						{models[selectedModelIdx]?.name}
 					{:else}
-						{$i18n.t('Hello, {{name}}', { name: $user?.name })}
+						{$i18n.t('Hello, {{name}}', { name: username })}
 					{/if}
 				</div>
 			</div>
@@ -186,6 +188,21 @@
 				</div>
 			</div>
 
+			<div class="w-full mx-auto max-w-2xl font-primary mt-2" in:fade={{ duration: 200, delay: 200 }}>
+				<div class="mx-3">
+					<Suggestions
+						suggestionPrompts={atSelectedModel?.info?.meta?.suggestion_prompts ??
+					models[selectedModelIdx]?.info?.meta?.suggestion_prompts ??
+					$config?.default_prompt_suggestions ??
+					[]}
+						inputValue={prompt}
+						on:select={(e) => {
+					selectSuggestionPrompt(e.detail);
+				}}
+					/>
+				</div>
+			</div>
+
 			<div class="text-base font-normal @md:max-w-3xl w-full py-3 {atSelectedModel ? 'mt-2' : ''}">
 				<MessageInput
 					{history}
@@ -203,7 +220,7 @@
 					{transparentBackground}
 					{stopResponse}
 					{createMessagePair}
-					placeholder={$i18n.t('How can I help you today?')}
+					placeholder={$i18n.t('How can I help you today?', { username })}
 					onChange={(input) => {
 						if (input.prompt !== null) {
 							localStorage.setItem(`chat-input`, JSON.stringify(input));
@@ -219,20 +236,6 @@
 					}}
 				/>
 			</div>
-		</div>
-	</div>
-	<div class="mx-auto max-w-2xl font-primary mt-2" in:fade={{ duration: 200, delay: 200 }}>
-		<div class="mx-5">
-			<Suggestions
-				suggestionPrompts={atSelectedModel?.info?.meta?.suggestion_prompts ??
-					models[selectedModelIdx]?.info?.meta?.suggestion_prompts ??
-					$config?.default_prompt_suggestions ??
-					[]}
-				inputValue={prompt}
-				on:select={(e) => {
-					selectSuggestionPrompt(e.detail);
-				}}
-			/>
 		</div>
 	</div>
 </div>
