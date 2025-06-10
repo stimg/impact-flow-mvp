@@ -171,7 +171,7 @@
 
 			{#if message.content !== ''}
 				{#if edit === true}
-					<div class=" w-full bg-gray-50 dark:bg-gray-800 rounded-3xl px-5 py-3 mb-2">
+					<div class=" w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-5 py-3 mb-2">
 						{#if (editedFiles ?? []).length > 0}
 							<div class="flex items-center flex-wrap gap-2 -mx-2 mb-1">
 								{#each editedFiles as file, fileIdx}
@@ -259,7 +259,7 @@
 							<div>
 								<button
 									id="save-edit-message-button"
-									class=" px-4 py-2 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 border border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200 transition rounded-3xl"
+									class=" px-4 py-2 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 border border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200 transition rounded-xl"
 									on:click={() => {
 										editMessageConfirmHandler(false);
 									}}
@@ -271,7 +271,7 @@
 							<div class="flex space-x-1.5">
 								<button
 									id="close-edit-message-button"
-									class="px-4 py-2 bg-white dark:bg-gray-900 hover:bg-gray-100 text-gray-800 dark:text-gray-100 transition rounded-3xl"
+									class="px-4 py-2 bg-white dark:bg-gray-900 hover:bg-gray-100 text-gray-800 dark:text-gray-100 transition rounded-xl"
 									on:click={() => {
 										cancelEditMessage();
 									}}
@@ -281,7 +281,7 @@
 
 								<button
 									id="confirm-edit-message-button"
-									class=" px-4 py-2 bg-gray-900 dark:bg-white hover:bg-gray-850 text-gray-100 dark:text-gray-800 transition rounded-3xl"
+									class=" px-4 py-2 bg-gray-900 dark:bg-white hover:bg-gray-850 text-gray-100 dark:text-gray-800 transition rounded-xl"
 									on:click={() => {
 										editMessageConfirmHandler();
 									}}
@@ -295,7 +295,7 @@
 					<div class="w-full">
 						<div class="flex {($settings?.chatBubble ?? true) ? 'justify-end pb-1' : 'w-full'}">
 							<div
-								class="rounded-3xl {($settings?.chatBubble ?? true)
+								class="rounded-xl {($settings?.chatBubble ?? true)
 									? `max-w-[90%] px-5 py-2  bg-gray-50 dark:bg-gray-850 ${
 											message.files ? 'rounded-tr-lg' : ''
 										}`

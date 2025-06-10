@@ -1,20 +1,24 @@
+.env
+.env.*
 .github
 .idea
+.venv
 .DS_Store
+.ipynb_checkpoints
 docs
 kubernetes
 node_modules
 /.svelte-kit
 /package
-.env
-#.env.*
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 __pycache__
-.venv
 _old
-uploads
-.ipynb_checkpoints
-# **/*.db
 _test
-# backend/data/*
+uploads
+/backend/data/*
+/backend/data/litellm/*
+!/backend/data/litellm
+!/backend/data/litellm/config.yaml
+!/backend/data/config.json
+
