@@ -8,10 +8,10 @@
 	import { getBackendConfig } from '$lib/apis';
 	import { ldapUserSignIn, getSessionUser, userSignIn, userSignUp } from '$lib/apis/auths';
 
-	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
+	import { WEBUI_BASE_URL } from '$lib/constants';
 	import { WEBUI_NAME, config, user, socket } from '$lib/stores';
 
-	import { generateInitialsImage, canvasPixelTest } from '$lib/utils';
+	import { generateInitialsImage } from '$lib/utils';
 
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import OnBoarding from '$lib/components/OnBoarding.svelte';
@@ -118,6 +118,9 @@
 		await tick();
 		const logo = document.getElementById('logo');
 
+		// XXX:Temporary. Solve this in the backend.
+		WEBUI_NAME.set('Impact Flow');
+
 		if (logo) {
 			const isDarkMode = document.documentElement.classList.contains('dark');
 
@@ -182,7 +185,7 @@
 						id="logo"
 						crossorigin="anonymous"
 						src="{WEBUI_BASE_URL}/static/splash.png"
-						class=" w-6 rounded-full"
+						class=" w-10 rounded-full"
 						alt=""
 					/>
 				</div>

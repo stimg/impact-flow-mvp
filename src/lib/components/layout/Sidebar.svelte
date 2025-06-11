@@ -504,11 +504,11 @@
 						<img
 							crossorigin="anonymous"
 							src="{WEBUI_BASE_URL}/static/favicon.png"
-							class=" size-5 -translate-x-1.5 rounded-full"
+							class=" size-6 -translate-x-1.5 rounded-full"
 							alt="logo"
 						/>
 					</div>
-					<div class=" self-center font-medium text-sm text-gray-850 dark:text-white font-primary">
+					<div class=" self-center font-medium text-base text-gray-850 dark:text-white font-primary">
 						{$i18n.t('New Chat')}
 					</div>
 				</div>

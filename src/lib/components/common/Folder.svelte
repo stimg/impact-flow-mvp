@@ -138,7 +138,7 @@
 						{/if}
 					</div>
 
-					<div class="translate-y-[0.5px]">
+					<div class="translate-y-[0.5px] text-sm">
 						{name}
 					</div>
 				</button>

@@ -90,6 +90,7 @@
 	import NotificationToast from '../NotificationToast.svelte';
 	import Spinner from '../common/Spinner.svelte';
 	import { fade } from 'svelte/transition';
+	import dayjs from '$lib/dayjs';
 
 	export let chatIdProp = '';
 
@@ -2192,6 +2193,7 @@
 					{eventTarget}
 				/>
 			</PaneGroup>
+			<div class="text-center text-sm text-gray-400 dark:text-gray-600 mb-7">{dayjs().year()} Impact Flow ❤ Kreiert mit <a href="https://www.openwebui.com" target="_blank">Open WebUI</a></div>
 		</div>
 	{:else if loading}
 		<div class=" flex items-center justify-center h-full w-full">

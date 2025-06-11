@@ -900,7 +900,6 @@ TOOL_SERVER_CONNECTIONS = PersistentConfig(
 # WEBUI
 ####################################
 
-
 WEBUI_URL = PersistentConfig(
     "WEBUI_URL", "webui.url", os.environ.get("WEBUI_URL", "http://localhost:3000")
 )
