@@ -216,15 +216,15 @@
 			embeddingModel = embeddingConfig.embedding_model;
 			embeddingBatchSize = embeddingConfig.embedding_batch_size ?? 1;
 
-			OpenAIKey = embeddingConfig.openai_config.key;
-			OpenAIUrl = embeddingConfig.openai_config.url;
+			OpenAIKey = embeddingConfig.openai_config?.key;
+			OpenAIUrl = embeddingConfig.openai_config?.url;
 
-			OllamaKey = embeddingConfig.ollama_config.key;
-			OllamaUrl = embeddingConfig.ollama_config.url;
+			OllamaKey = embeddingConfig.ollama_config?.key;
+			OllamaUrl = embeddingConfig.ollama_config?.url;
 
-			AzureOpenAIKey = embeddingConfig.azure_openai_config.key;
-			AzureOpenAIUrl = embeddingConfig.azure_openai_config.url;
-			AzureOpenAIVersion = embeddingConfig.azure_openai_config.version;
+			AzureOpenAIKey = embeddingConfig.azure_openai_config?.key;
+			AzureOpenAIUrl = embeddingConfig.azure_openai_config?.url;
+			AzureOpenAIVersion = embeddingConfig.azure_openai_config?.version;
 		}
 	};
 	onMount(async () => {
@@ -624,7 +624,7 @@
 										placeholder="Select an embedding model engine"
 										on:change={(e) => {
 											if (e.target.value === 'ollama') {
-												embeddingModel = '';
+												embeddingModel = 'bge-m3';
 											} else if (e.target.value === 'openai') {
 												embeddingModel = 'text-embedding-3-small';
 											} else if (e.target.value === 'azure_openai') {

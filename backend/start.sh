@@ -40,6 +40,9 @@ if [[ "${USE_OLLAMA_DOCKER,,}" == "true" ]]; then
       sleep 1
     done
 
+    # Pull related ollamam embedding model
+    ollama pull bge-m3
+
     # Run gemma:2b LLM
     ollama run gemma:2b &
 fi
