@@ -75,7 +75,7 @@
 					{/if}
 				</div>
 
-				<div class="flex-1 text-sm">
+				<div class="flex-1 text-sm text-gray-700 dark:text-white max-h-20 overflow-y-auto">
 					{@html marked.parse(DOMPurify.sanitize(banner.content))}
 				</div>
 			</div>
