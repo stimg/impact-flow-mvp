@@ -1455,7 +1455,7 @@
 											<div class=" flex items-center">
 												<Tooltip content={$i18n.t('Stop')}>
 													<button
-														class="bg-white hover:bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-800 transition rounded-full p-1.5"
+														class="svg-button transition rounded-full p-1.5"
 														on:click={() => {
 															stopResponse();
 														}}
@@ -1464,7 +1464,7 @@
 															xmlns="http://www.w3.org/2000/svg"
 															viewBox="0 0 24 24"
 															fill="currentColor"
-															class="size-5"
+															class="size-10"
 														>
 															<path
 																fill-rule="evenodd"
