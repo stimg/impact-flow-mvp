@@ -1404,7 +1404,7 @@
 											<Tooltip content={$i18n.t('Dictate')}>
 												<button
 													id="voice-input-button"
-													class="svg-button transition rounded-full p-1.5 mr-0.5 self-center"
+													class="svg-button"
 													type="button"
 													on:click={async () => {
 														try {
@@ -1452,12 +1452,7 @@
 										{#if (taskIds && taskIds.length > 0) || (history.currentId && history.messages[history.currentId]?.done != true)}
 											<div class=" flex items-center">
 												<Tooltip content={$i18n.t('Stop')}>
-													<button
-														class="svg-button transition rounded-full p-1.5"
-														on:click={() => {
-															stopResponse();
-														}}
-													>
+													<button class="svg-button" on:click={() => { stopResponse(); }}>
 														<svg
 															xmlns="http://www.w3.org/2000/svg"
 															viewBox="0 0 24 24"
@@ -1478,7 +1473,7 @@
 												<!-- {$i18n.t('Call')} -->
 												<Tooltip content={$i18n.t('Voice mode')}>
 													<button
-														class=" button transition rounded-full p-1.5 self-center"
+														class="button !px-1.5"
 														type="button"
 														on:click={async () => {
 															if (selectedModels.length > 1) {
@@ -1539,12 +1534,7 @@
 										{:else}
 											<div class=" flex items-center">
 												<Tooltip content={$i18n.t('Send message')}>
-													<button
-														id="send-message-button"
-														class="button transition rounded-full p-1.5 self-center"
-														type="submit"
-														disabled={prompt === '' && files.length === 0}
-													>
+													<button id="send-message-button" class="button" type="submit" disabled={prompt === '' && files.length === 0}>
 														<svg
 															xmlns="http://www.w3.org/2000/svg"
 															viewBox="0 0 16 16"

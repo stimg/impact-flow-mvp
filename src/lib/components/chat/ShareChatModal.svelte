@@ -148,7 +148,7 @@
 							{/if}
 
 							<button
-								class="self-center flex items-center gap-1 px-3.5 py-2 text-sm font-medium button transition rounded-full"
+								class="self-center flex items-center gap-1 button"
 								type="button"
 								id="copy-and-share-chat-button"
 								on:click={async () => {

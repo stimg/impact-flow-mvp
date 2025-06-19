@@ -199,12 +199,7 @@
 				class="absolute bottom-0 right-0 left-0 flex justify-center w-full bg-linear-to-b from-transparent to-white dark:to-gray-900"
 			>
 				<div class="pb-5">
-					<button
-						class="px-4 py-2 text-sm font-medium button transition rounded-full"
-						on:click={cloneSharedChat}
-					>
-						{$i18n.t('Clone Chat')}
-					</button>
+					<button class="button" on:click={cloneSharedChat}>{$i18n.t('Clone Chat')}</button>
 				</div>
 			</div>
 		</div>

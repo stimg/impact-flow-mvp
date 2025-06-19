@@ -135,13 +135,7 @@
 					</div>
 
 					<div class="flex justify-end pt-3 text-sm font-medium">
-						<button
-							class="px-3.5 py-1.5 text-sm font-medium button transition rounded-full {saving
-								? ' cursor-not-allowed'
-								: ''}"
-							type="submit"
-							disabled={saving}
-						>
+						<button class="button" type="submit" disabled={saving}>
 							{$i18n.t('Save')}
 
 							{#if saving}

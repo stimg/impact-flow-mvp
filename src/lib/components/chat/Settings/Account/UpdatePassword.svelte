@@ -102,11 +102,7 @@
 		</div>
 
 		<div class="mt-3 flex justify-end">
-			<button
-				class="px-3.5 py-1.5 text-sm font-medium button transition rounded-full"
-			>
-				{$i18n.t('Update password')}
-			</button>
+			<button class="button">{$i18n.t('Update password')}</button>
 		</div>
 	{/if}
 </form>

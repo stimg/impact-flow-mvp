@@ -372,12 +372,7 @@
 									{$i18n.t('Add')}
 								</button>
 
-								<button
-									class="px-3.5 py-1.5 text-sm font-medium button transition rounded-lg"
-									on:click={() => {
-										submitHandler();
-									}}
-								>
+								<button class="button" on:click={() => submitHandler();}>
 									{$i18n.t('Run')}
 								</button>
 							{:else}

@@ -302,13 +302,6 @@
 	</div>
 
 	<div class="flex justify-end pt-3 text-sm font-medium">
-		<button
-			class="px-3.5 py-1.5 text-sm font-medium button transition rounded-full"
-			on:click={() => {
-				saveHandler();
-			}}
-		>
-			{$i18n.t('Save')}
-		</button>
+		<button class="button" on:click={() => saveHandler();}>{$i18n.t('Save')}</button>
 	</div>
 </div>

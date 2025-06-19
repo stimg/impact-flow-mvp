@@ -551,7 +551,7 @@
 									<Tooltip content={$i18n.t('Record voice')}>
 										<button
 											id="voice-input-button"
-											class="svg-button transition rounded-full p-1.5 mr-0.5 self-center"
+											class="svg-button"
 											type="button"
 											on:click={async () => {
 												try {

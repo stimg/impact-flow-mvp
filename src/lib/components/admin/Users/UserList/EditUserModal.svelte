@@ -159,10 +159,7 @@
 						</div>
 
 						<div class="flex justify-end pt-3 text-sm font-medium">
-							<button
-								class="px-3.5 py-1.5 text-sm font-medium button transition rounded-full flex flex-row space-x-1 items-center"
-								type="submit"
-							>
+							<button class="button flex flex-row space-x-1 items-center" type="submit">
 								{$i18n.t('Save')}
 							</button>
 						</div>

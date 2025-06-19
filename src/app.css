@@ -41,15 +41,19 @@ code {
 }
 
 .button {
-	@apply  text-white dark:text-black
-	disabled:bg-gray-300 disabled:dark:bg-gray-800
+	@apply text-sm font-medium
+	text-white dark:text-black
 	bg-black hover:bg-gray-800
-	dark:bg-white dark:hover:bg-gray-200;
+	disabled:bg-gray-300 disabled:dark:bg-gray-800
+	dark:bg-white dark:hover:bg-gray-200
+	rounded-full px-3.5 py-1.5 transition
+	disabled:cursor-not-allowed;
 }
 
 .svg-button {
 	@apply text-black hover:text-gray-800
-	 dark:text-white dark:hover:text-gray-800
+	dark:text-white dark:hover:text-gray-800
+	transition rounded-full p-1.5 mr-0.5 self-center;
 }
 
 .font-secondary {

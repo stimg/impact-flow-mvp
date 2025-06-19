@@ -754,11 +754,7 @@
 					</div>
 
 					<div class="my-2 flex justify-end pb-20 pr-5 mt-5">
-						<button
-							class=" text-sm px-3 py-2 transition rounded-full button flex justify-center"
-							type="submit"
-							disabled={loading}
-						>
+						<button class="button flex justify-center" type="submit" disabled={loading}>
 							<div class=" self-center font-medium">
 								{#if edit}
 									{$i18n.t('Save & Update')}

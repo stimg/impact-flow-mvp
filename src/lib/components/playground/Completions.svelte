@@ -162,12 +162,7 @@
 
 			<div class="pb-3 flex justify-end">
 				{#if !loading}
-					<button
-						class="px-3.5 py-1.5 text-sm font-medium button transition rounded-full"
-						on:click={() => {
-							submitHandler();
-						}}
-					>
+					<button class="button" on:click={() => submitHandler();}>
 						{$i18n.t('Run')}
 					</button>
 				{:else}

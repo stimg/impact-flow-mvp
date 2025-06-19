@@ -312,13 +312,7 @@ class Tools:
 							>
 						</div>
 					</div>
-
-					<button
-						class="px-3.5 py-1.5 text-sm font-medium button transition rounded-full"
-						type="submit"
-					>
-						{$i18n.t('Save')}
-					</button>
+					<button class="button" type="submit">{$i18n.t('Save')}</button>
 				</div>
 			</div>
 		</form>
