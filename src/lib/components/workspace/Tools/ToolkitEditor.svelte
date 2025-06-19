@@ -57,7 +57,7 @@ class Tools:
         pass
 
     # Add your custom tools using pure Python code here, make sure to add type hints and descriptions
-	
+
     def get_user_name_and_email_and_id(self, __user__: dict = {}) -> str:
         """
         Get the user name, Email and ID from the user object.
@@ -314,7 +314,7 @@ class Tools:
 					</div>
 
 					<button
-						class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
+						class="px-3.5 py-1.5 text-sm font-medium button transition rounded-full"
 						type="submit"
 					>
 						{$i18n.t('Save')}

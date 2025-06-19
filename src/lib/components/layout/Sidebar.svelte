@@ -504,7 +504,7 @@
 						<img
 							crossorigin="anonymous"
 							src="{WEBUI_BASE_URL}/static/favicon.png"
-							class="sidebar-new-chat-icon size-5 -translate-x-1.5 rounded-full"
+							class="sidebar-new-chat-icon size-7 -translate-x-1.5 -translate-y-0.5 rounded-full"
 							alt="logo"
 						/>
 					</div>

@@ -27,8 +27,8 @@
 		'not_helpful',
 		'not_factually_correct',
 		'didnt_fully_follow_instructions',
-		'refused_when_it_shouldnt_have',
 		'being_lazy',
+		'refused_when_it_shouldnt_have',
 		'other'
 	];
 
@@ -38,7 +38,7 @@
 	let selectedReason = null;
 	let comment = '';
 
-	let detailedRating = null;
+	let detailedRating: null | number = null;
 	let selectedModel = null;
 
 	$: if (message?.annotation?.rating === 1) {
@@ -138,14 +138,14 @@
 
 	<div class="w-full flex justify-center">
 		<div class=" relative w-fit overflow-x-auto scrollbar-none">
-			<div class="mt-1.5 w-fit flex gap-1 pb-2">
+			<div class="mt-1.5 w-fit flex gap-1.5 sm:gap-3 lg:gap-5 pb-2">
 				<!-- 1-10 scale -->
 				{#each Array.from({ length: 10 }).map((_, i) => i + 1) as rating}
 					<button
-						class="size-7 text-sm border border-gray-100 dark:border-gray-850 hover:bg-gray-50 dark:hover:bg-gray-850 {detailedRating ===
+						class="size-6 sm:size-7 text-sm border border-gray-300 dark:border-gray-800 hover:bg-gray-200 dark:hover:bg-gray-600 {detailedRating ===
 						rating
-							? 'bg-gray-100 dark:bg-gray-800'
-							: ''} transition rounded-full disabled:cursor-not-allowed disabled:text-gray-500 disabled:bg-white dark:disabled:bg-gray-900"
+							? 'bg-gray-200 dark:bg-gray-600'
+							: ''} transition rounded-full disabled:cursor-not-allowed disabled:text-gray-300 dark:disabled:text-gray-800 disabled:bg-white dark:disabled:bg-gray-900"
 						on:click={() => {
 							detailedRating = rating;
 						}}
@@ -172,12 +172,12 @@
 		{#if reasons.length > 0}
 			<div class="text-sm mt-1.5 font-medium">{$i18n.t('Why?')}</div>
 
-			<div class="flex flex-wrap gap-1.5 text-sm mt-1.5">
+			<div class="flex flex-wrap gap-1.5 sm:gap-2 text-sm mt-1.5">
 				{#each reasons as reason}
 					<button
-						class="px-3 py-0.5 border border-gray-100 dark:border-gray-850 hover:bg-gray-50 dark:hover:bg-gray-850 {selectedReason ===
+						class="px-3 py-0.5 border border-gray-300 dark:border-gray-800 hover:bg-gray-200 dark:hover:bg-gray-600 {selectedReason ===
 						reason
-							? 'bg-gray-100 dark:bg-gray-800'
+							? 'bg-gray-200 dark:bg-gray-600'
 							: ''} transition rounded-xl"
 						on:click={() => {
 							selectedReason = reason;
@@ -229,25 +229,25 @@
 		/>
 	</div>
 
-	<div class="mt-2 gap-1.5 flex justify-between">
-		<div class="flex items-end group">
-			<Tags
-				{tags}
-				on:delete={(e) => {
-					tags = tags.filter(
-						(tag) =>
-							tag.name.replaceAll(' ', '_').toLowerCase() !==
-							e.detail.replaceAll(' ', '_').toLowerCase()
-					);
-				}}
-				on:add={(e) => {
-					tags = [...tags, { name: e.detail }];
-				}}
-			/>
-		</div>
+	<div class="flex gap-1.5 md:gap-3 items-end group mb-5">
+		<Tags
+			{tags}
+			on:delete={(e) => {
+				tags = tags.filter(
+					(tag) =>
+						tag.name.replaceAll(' ', '_').toLowerCase() !==
+						e.detail.replaceAll(' ', '_').toLowerCase()
+				);
+			}}
+			on:add={(e) => {
+				tags = [...tags, { name: e.detail }];
+			}}
+		/>
+	</div>
 
-		<button
-			class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
+	<div class="text-right">
+		<button disabled={detailedRating === null}
+			class="px-3.5 py-1.5 text-sm font-medium disabled:cursor-not-allowed button transition rounded-full"
 			on:click={() => {
 				saveHandler();
 			}}
