@@ -288,7 +288,7 @@
 				/>
 
 				<div class="ml-1 mr-2">
-					<button disabled={floatingInputValue === ''} class="button" on:click={() => askHandler();}>
+					<button disabled={floatingInputValue === ''} class="button" on:click={() => askHandler()}>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
 							viewBox="0 0 16 16"

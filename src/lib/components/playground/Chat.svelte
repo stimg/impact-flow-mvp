@@ -372,7 +372,7 @@
 									{$i18n.t('Add')}
 								</button>
 
-								<button class="button" on:click={() => submitHandler();}>
+								<button class="button" on:click={() => submitHandler()}>
 									{$i18n.t('Run')}
 								</button>
 							{:else}

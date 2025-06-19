@@ -1534,7 +1534,7 @@
 										{:else}
 											<div class=" flex items-center">
 												<Tooltip content={$i18n.t('Send message')}>
-													<button id="send-message-button" class="button" type="submit" disabled={prompt === '' && files.length === 0}>
+													<button id="send-message-button" class="button !px-1.5" type="submit" disabled={prompt === '' && files.length === 0}>
 														<svg
 															xmlns="http://www.w3.org/2000/svg"
 															viewBox="0 0 16 16"

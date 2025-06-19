@@ -246,7 +246,7 @@
 	</div>
 
 	<div class="text-right">
-		<button disabled={detailedRating === null} class="button" on:click={() => saveHandler();}>
+		<button disabled={detailedRating === null} class="button" on:click={() => saveHandler()}>
 			{$i18n.t('Save')}
 		</button>
 	</div>

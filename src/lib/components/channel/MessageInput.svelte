@@ -598,7 +598,7 @@
 										<Tooltip content={$i18n.t('Send message')}>
 											<button
 												id="send-message-button"
-												class="button transition rounded-full p-1.5 self-center"
+												class="button !p-1.5"
 												type="submit"
 												disabled={content === '' && files.length === 0}
 											>
