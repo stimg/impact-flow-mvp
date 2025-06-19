@@ -441,7 +441,7 @@
 
 	<div class="flex justify-end pt-3 text-sm font-medium">
 		<button
-			class="px-3.5 py-1.5 text-sm font-medium button transition rounded-full"
+			class="button"
 			on:click={async () => {
 				const res = await submitHandler();
 

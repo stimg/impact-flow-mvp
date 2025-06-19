@@ -112,7 +112,7 @@
 					await updateUserSettings(localStorage.token, { ui: $settings });
 					show = false;
 				}}
-				class="px-3.5 py-1.5 text-sm font-medium button transition rounded-full"
+				class="button"
 			>
 				<span class="relative">{$i18n.t("Okay, Let's Go!")}</span>
 			</button>

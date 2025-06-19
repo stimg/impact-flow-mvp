@@ -288,12 +288,7 @@
 				/>
 
 				<div class="ml-1 mr-2">
-					<button disabled={floatingInputValue === ''}
-						class="button transition rounded-full p-1.5 m-0.5 self-center"
-						on:click={() => {
-							askHandler();
-						}}
-					>
+					<button disabled={floatingInputValue === ''} class="button" on:click={() => askHandler();}>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
 							viewBox="0 0 16 16"
@@ -332,12 +327,7 @@
 
 					{#if responseDone}
 						<div class="flex justify-end pt-3 text-sm font-medium">
-							<button
-								class="px-3.5 py-1.5 text-sm font-medium button transition rounded-full"
-								on:click={addHandler}
-							>
-								{$i18n.t('Add')}
-							</button>
+							<button class="button" on:click={addHandler}>{$i18n.t('Add')}</button>
 						</div>
 					{/if}
 				</div>

@@ -64,13 +64,7 @@
 				{/if}
 			</div>
 			<div class="flex justify-end pt-3">
-				<button
-					class="px-3.5 py-1.5 text-sm font-medium button transition rounded-full"
-					type="button"
-					on:click={close}
-				>
-					{$i18n.t('Close')}
-				</button>
+				<button class="button" type="button" on:click={close}>{$i18n.t('Close')}</button>
 			</div>
 		</div>
 	{/if}

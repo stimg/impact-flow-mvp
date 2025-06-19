@@ -700,13 +700,7 @@
 	</div>
 
 	<div class="flex justify-end pt-3 text-sm font-medium">
-		<button
-			class="px-3.5 py-1.5 text-sm font-medium button transition rounded-full flex flex-row space-x-1 items-center {loading
-				? ' cursor-not-allowed'
-				: ''}"
-			type="submit"
-			disabled={loading}
-		>
+		<button class="button flex flex-row space-x-1 items-center" type="submit" disabled={loading}>
 			{$i18n.t('Save')}
 
 			{#if loading}

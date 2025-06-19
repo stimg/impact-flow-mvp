@@ -246,12 +246,7 @@
 	</div>
 
 	<div class="text-right">
-		<button disabled={detailedRating === null}
-			class="px-3.5 py-1.5 text-sm font-medium disabled:cursor-not-allowed button transition rounded-full"
-			on:click={() => {
-				saveHandler();
-			}}
-		>
+		<button disabled={detailedRating === null} class="button" on:click={() => saveHandler();}>
 			{$i18n.t('Save')}
 		</button>
 	</div>

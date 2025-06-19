@@ -219,15 +219,15 @@
 			embeddingModel = embeddingConfig.embedding_model;
 			embeddingBatchSize = embeddingConfig.embedding_batch_size ?? 1;
 
-			OpenAIKey = embeddingConfig.openai_config?.key;
-			OpenAIUrl = embeddingConfig.openai_config?.url;
+			OpenAIKey = embeddingConfig.openai_config.key;
+			OpenAIUrl = embeddingConfig.openai_config.url;
 
-			OllamaKey = embeddingConfig.ollama_config?.key;
-			OllamaUrl = embeddingConfig.ollama_config?.url;
+			OllamaKey = embeddingConfig.ollama_config.key;
+			OllamaUrl = embeddingConfig.ollama_config.url;
 
-			AzureOpenAIKey = embeddingConfig.azure_openai_config?.key;
-			AzureOpenAIUrl = embeddingConfig.azure_openai_config?.url;
-			AzureOpenAIVersion = embeddingConfig.azure_openai_config?.version;
+			AzureOpenAIKey = embeddingConfig.azure_openai_config.key;
+			AzureOpenAIUrl = embeddingConfig.azure_openai_config.url;
+			AzureOpenAIVersion = embeddingConfig.azure_openai_config.version;
 		}
 	};
 	onMount(async () => {
@@ -704,7 +704,7 @@
 										placeholder="Select an embedding model engine"
 										on:change={(e) => {
 											if (e.target.value === 'ollama') {
-												embeddingModel = 'bge-m3';
+												embeddingModel = '';
 											} else if (e.target.value === 'openai') {
 												embeddingModel = 'text-embedding-3-small';
 											} else if (e.target.value === 'azure_openai') {
@@ -1263,10 +1263,7 @@
 			</div>
 		</div>
 		<div class="flex justify-end pt-3 text-sm font-medium">
-			<button
-				class="px-3.5 py-1.5 text-sm font-medium button transition rounded-full"
-				type="submit"
-			>
+			<button class="button" type="submit">
 				{$i18n.t('Save')}
 			</button>
 		</div>

@@ -647,10 +647,9 @@
 								dispatch('submit', prompt);
 							}}
 						>
-							<div class="flex-1 flex flex-col relative w-full shadow-lg rounded-xl border border-gray-50
-							dark:border-gray-850 hover:border-gray-100 focus-within:border-gray-100 hover:dark:border-gray-800
-							focus-within:dark:border-gray-800 transition px-1 bg-white/90 dark:bg-gray-400/5 dark:text-gray-100"
-									 dir={$settings?.chatDirection ?? 'auto'}
+							<div
+								class="flex-1 flex flex-col relative w-full shadow-lg rounded-3xl border border-gray-50 dark:border-gray-850 hover:border-gray-100 focus-within:border-gray-100 hover:dark:border-gray-800 focus-within:dark:border-gray-800 transition px-1 bg-white/90 dark:bg-gray-400/5 dark:text-gray-100"
+								dir={$settings?.chatDirection ?? 'auto'}
 							>
 								{#if files.length > 0}
 									<div class="mx-2 mt-2.5 -mb-1 flex items-center flex-wrap gap-2">
@@ -748,8 +747,7 @@
 								<div class="px-2.5">
 									{#if $settings?.richTextInput ?? true}
 										<div
-											class="scrollbar-hidden rtl:text-right ltr:text-left bg-transparent dark:text-gray-100
-											outline-hidden w-full pt-2.5 pb-[5px] px-1 resize-none h-fit max-h-80 overflow-auto"
+											class="scrollbar-hidden rtl:text-right ltr:text-left bg-transparent dark:text-gray-100 outline-hidden w-full pt-2.5 pb-[5px] px-1 resize-none h-fit max-h-80 overflow-auto"
 											id="chat-input-container"
 										>
 											<RichTextInput
@@ -971,7 +969,7 @@
 											id="chat-input"
 											dir={$settings?.chatDirection ?? 'auto'}
 											bind:this={chatInputElement}
-											class="scrollbar-hidden bg-transparent dark:text-gray-200 outline-hidden w-full pt-3 px-1 resize-none text-xs"
+											class="scrollbar-hidden bg-transparent dark:text-gray-200 outline-hidden w-full pt-3 px-1 resize-none"
 											placeholder={placeholder ? placeholder : $i18n.t('Send a Message')}
 											bind:value={prompt}
 											on:compositionstart={() => (isComposing = true)}
@@ -1406,7 +1404,7 @@
 											<Tooltip content={$i18n.t('Dictate')}>
 												<button
 													id="voice-input-button"
-													class="svg-button transition rounded-full p-1.5 mr-0.5 self-center"
+													class="svg-button"
 													type="button"
 													on:click={async () => {
 														try {
@@ -1454,12 +1452,7 @@
 										{#if (taskIds && taskIds.length > 0) || (history.currentId && history.messages[history.currentId]?.done != true)}
 											<div class=" flex items-center">
 												<Tooltip content={$i18n.t('Stop')}>
-													<button
-														class="svg-button transition rounded-full p-1.5"
-														on:click={() => {
-															stopResponse();
-														}}
-													>
+													<button class="svg-button" on:click={() => { stopResponse(); }}>
 														<svg
 															xmlns="http://www.w3.org/2000/svg"
 															viewBox="0 0 24 24"
@@ -1480,7 +1473,7 @@
 												<!-- {$i18n.t('Call')} -->
 												<Tooltip content={$i18n.t('Voice mode')}>
 													<button
-														class=" button transition rounded-full p-1.5 self-center"
+														class="button !px-1.5"
 														type="button"
 														on:click={async () => {
 															if (selectedModels.length > 1) {
@@ -1541,12 +1534,7 @@
 										{:else}
 											<div class=" flex items-center">
 												<Tooltip content={$i18n.t('Send message')}>
-													<button
-														id="send-message-button"
-														class="button transition rounded-full p-1.5 self-center"
-														type="submit"
-														disabled={prompt === '' && files.length === 0}
-													>
+													<button id="send-message-button" class="button" type="submit" disabled={prompt === '' && files.length === 0}>
 														<svg
 															xmlns="http://www.w3.org/2000/svg"
 															viewBox="0 0 16 16"
