@@ -169,7 +169,7 @@
 	</div>
 
 	<div>
-		{#if reasons.length > 0}
+		{#if reasons.length > 0 && detailedRating}
 			<div class="text-sm mt-1.5 font-medium">{$i18n.t('Why?')}</div>
 
 			<div class="flex flex-wrap gap-1.5 sm:gap-2 text-sm mt-1.5">
@@ -220,34 +220,35 @@
 		{/if}
 	</div>
 
-	<div class="mt-2">
-		<textarea
-			bind:value={comment}
-			class="w-full text-sm px-1 py-2 bg-transparent outline-hidden resize-none rounded-xl"
-			placeholder={$i18n.t('Feel free to add specific details')}
-			rows="3"
-		/>
-	</div>
+	{#if detailedRating}
+		<div class="mt-2">
+			<textarea
+				bind:value={comment}
+				class="w-full text-sm px-1 py-2 bg-transparent outline-hidden resize-none rounded-xl"
+				placeholder={$i18n.t('Feel free to add specific details')}
+				rows="3"
+			/>
+		</div>
+		<div class="flex gap-1.5 md:gap-3 items-end group mb-5">
+			<Tags
+				{tags}
+				on:delete={(e) => {
+					tags = tags.filter(
+						(tag) =>
+							tag.name.replaceAll(' ', '_').toLowerCase() !==
+							e.detail.replaceAll(' ', '_').toLowerCase()
+					);
+				}}
+				on:add={(e) => {
+					tags = [...tags, { name: e.detail }];
+				}}
+			/>
+		</div>
+		<div class="text-right mt-3">
+			<button disabled={detailedRating === null} class="button" on:click={() => saveHandler()}>
+				{$i18n.t('Save')}
+			</button>
+		</div>
+	{/if}
 
-	<div class="flex gap-1.5 md:gap-3 items-end group mb-5">
-		<Tags
-			{tags}
-			on:delete={(e) => {
-				tags = tags.filter(
-					(tag) =>
-						tag.name.replaceAll(' ', '_').toLowerCase() !==
-						e.detail.replaceAll(' ', '_').toLowerCase()
-				);
-			}}
-			on:add={(e) => {
-				tags = [...tags, { name: e.detail }];
-			}}
-		/>
-	</div>
-
-	<div class="text-right">
-		<button disabled={detailedRating === null} class="button" on:click={() => saveHandler()}>
-			{$i18n.t('Save')}
-		</button>
-	</div>
 </div>
