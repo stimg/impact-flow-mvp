@@ -1289,6 +1289,31 @@ async def embeddings(
     # Use generic dispatcher in utils.embeddings
     return await generate_embeddings(request, form_data, user)
 
+@app.post("/api/product/embeddings")
+async def create_product_embeddings(
+    request: Request, form_data: dict, user=Depends(get_verified_user)
+):
+    """
+    Ollama-compatible embeddings endpoint.
+
+    This handler:
+      - Performs user/model checks and dispatches to the correct backend.
+      - Supports OpenAI, Ollama, arena models, pipelines, and any compatible provider.
+
+    Args:
+        request (Request): Request context.
+        form_data (dict): Ollama payload (e.g., {"model": "...", "input": [...]})
+        user (UserModel): Authenticated user.
+
+    Returns:
+        dict: Ollama-compatible embeddings response.
+    """
+    # Make sure models are loaded in app state
+    if not request.app.state.MODELS:
+        await get_all_models(request, user=user)
+    # Use generic dispatcher in utils.embeddings
+    return await generate_embeddings(request, form_data, user)
+
 
 @app.post("/api/chat/completions")
 async def chat_completion(

@@ -1263,6 +1263,118 @@ def save_docs_to_vector_db(
         raise e
 
 
+def save_product_to_vector_db(
+    request: Request,
+    docs,
+    product_id,
+    metadata: Optional[dict] = None,
+    overwrite: bool = False,
+    split: bool = True,
+    add: bool = False,
+    user=None,
+) -> bool:
+    # Check if entries with the same hash (metadata.hash) already exist
+    if split:
+        if request.app.state.config.TEXT_SPLITTER in ["", "character"]:
+            text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=request.app.state.config.CHUNK_SIZE,
+                chunk_overlap=request.app.state.config.CHUNK_OVERLAP,
+                add_start_index=True,
+            )
+        elif request.app.state.config.TEXT_SPLITTER == "token":
+            log.info(
+                f"Using token text splitter: {request.app.state.config.TIKTOKEN_ENCODING_NAME}"
+            )
+
+            tiktoken.get_encoding(str(request.app.state.config.TIKTOKEN_ENCODING_NAME))
+            text_splitter = TokenTextSplitter(
+                encoding_name=str(request.app.state.config.TIKTOKEN_ENCODING_NAME),
+                chunk_size=request.app.state.config.CHUNK_SIZE,
+                chunk_overlap=request.app.state.config.CHUNK_OVERLAP,
+                add_start_index=True,
+            )
+        else:
+            raise ValueError(ERROR_MESSAGES.DEFAULT("Invalid text splitter"))
+
+        docs = text_splitter.split_documents(docs)
+
+    if len(docs) == 0:
+        raise ValueError(ERROR_MESSAGES.EMPTY_CONTENT)
+
+    texts = [doc.page_content for doc in docs]
+
+    try:
+        if VECTOR_DB_CLIENT.has_product(id=product_id):
+            log.info(f"product id {product_id} already exists")
+
+            if overwrite:
+                VECTOR_DB_CLIENT.delete_product(id=product_id)
+                log.info(f"deleting existing product {product_id}")
+            elif add is False:
+                log.info(
+                    f"product {product_id} already exists, overwrite is False and add is False"
+                )
+                return True
+
+        log.info(f"adding to product {product_id}")
+        embedding_function = get_embedding_function(
+            request.app.state.config.RAG_EMBEDDING_ENGINE,
+            request.app.state.config.RAG_EMBEDDING_MODEL,
+            request.app.state.ef,
+            (
+                request.app.state.config.RAG_OPENAI_API_BASE_URL
+                if request.app.state.config.RAG_EMBEDDING_ENGINE == "openai"
+                else (
+                    request.app.state.config.RAG_OLLAMA_BASE_URL
+                    if request.app.state.config.RAG_EMBEDDING_ENGINE == "ollama"
+                    else request.app.state.config.RAG_AZURE_OPENAI_BASE_URL
+                )
+            ),
+            (
+                request.app.state.config.RAG_OPENAI_API_KEY
+                if request.app.state.config.RAG_EMBEDDING_ENGINE == "openai"
+                else (
+                    request.app.state.config.RAG_OLLAMA_API_KEY
+                    if request.app.state.config.RAG_EMBEDDING_ENGINE == "ollama"
+                    else request.app.state.config.RAG_AZURE_OPENAI_API_KEY
+                )
+            ),
+            request.app.state.config.RAG_EMBEDDING_BATCH_SIZE,
+            azure_api_version=(
+                request.app.state.config.RAG_AZURE_OPENAI_API_VERSION
+                if request.app.state.config.RAG_EMBEDDING_ENGINE == "azure_openai"
+                else None
+            ),
+        )
+
+        embeddings = embedding_function(
+            list(map(lambda x: x.replace("\n", " "), texts)),
+            prefix=RAG_EMBEDDING_CONTENT_PREFIX,
+            user=user,
+        )
+
+        items = [
+            {
+                "chunk_id": str(uuid.uuid4()),
+                "product_id": product_id,
+                "chunk_text": text,
+                "embedding": embeddings[idx],
+                "metadata": metadata,
+            }
+            for idx, text in enumerate(texts)
+        ]
+
+        VECTOR_DB_CLIENT.insert_product(
+            product_id=product_id,
+            items=items,
+        )
+
+        return True
+    except Exception as e:
+        log.exception(e)
+        raise e
+
+
 class ProcessFileForm(BaseModel):
     file_id: str
     content: Optional[str] = None

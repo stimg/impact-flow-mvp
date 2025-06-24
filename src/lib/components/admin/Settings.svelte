@@ -23,6 +23,7 @@
 	import Evaluations from './Settings/Evaluations.svelte';
 	import CodeExecution from './Settings/CodeExecution.svelte';
 	import Tools from './Settings/Tools.svelte';
+	import {createProductEmbeddings, generateEmbeddings} from '$lib/apis/ollama/index';
 
 	const i18n = getContext('i18n');
 
@@ -504,6 +505,16 @@
 			<Database
 				saveHandler={() => {
 					toast.success($i18n.t('Settings saved successfully!'));
+				}}
+				generateEmbeddingsHandler={async (token, model, id, text) => {
+					// const res = await createProductEmbeddings(token, model, id, text);
+					const res = await generateEmbeddings(token, model, text);
+					if (res?.ok) {
+						toast.success($i18n.t('Embeddings generated successfully!'));
+						console.log('Generated embeddings:', await res.json());
+					} else {
+						toast.error($i18n.t(`Failed to generate embeddings: ${res?.statusText}`));
+					}
 				}}
 			/>
 		{:else if selectedTab === 'pipelines'}

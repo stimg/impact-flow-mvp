@@ -21,10 +21,10 @@
 	let mounted = false;
 
 	const classNames: Record<string, string> = {
-		info: 'bg-indigo-500 dark:bg-indigo-800 text-white  border-indigo-800 dark:border-indigo-500',
-		success: 'bg-teal-500 dark:bg-teal-800 text-white border-teal-800 dark:border-teal-500',
-		warning: 'bg-amber-500 dark:bg-amber-800 text-white border-amber-800 dark:border-amber-500',
-		error: 'bg-rose-500 dark:bg-rose-800 text-white border-rose-800 dark:border-rose-500'
+		info: 'banner-info',
+		success: 'banne-success',
+		warning: 'banner-warning',
+		error: 'banner-error'
 	};
 
 	const dismiss = (id: string) => {

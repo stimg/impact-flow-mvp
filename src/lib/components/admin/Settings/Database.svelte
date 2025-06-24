@@ -8,10 +8,15 @@
 	import { toast } from 'svelte-sonner';
 	import { getAllUserChats } from '$lib/apis/chats';
 	import { exportConfig, importConfig } from '$lib/apis/configs';
+	import Textarea from "$lib/components/common/Textarea.svelte";
 
 	const i18n = getContext('i18n');
 
 	export let saveHandler: Function;
+	export let generateEmbeddingsHandler: (token: string, model: string, id: string, text: string) => void;
+	export let model = 'bge-m3';
+	export let productId = '';
+	export let productText = '';
 
 	const exportAllUserChats = async () => {
 		let blob = new Blob([JSON.stringify(await getAllUserChats(localStorage.token))], {
@@ -26,14 +31,14 @@
 </script>
 
 <form
-	class="flex flex-col h-full justify-between space-y-3 text-sm"
+	class="flex flex-col justify-between space-y-3 text-sm"
 	on:submit|preventDefault={async () => {
 		saveHandler();
 	}}
 >
-	<div class=" space-y-3 overflow-y-scroll scrollbar-hidden h-full">
+	<div class=" space-y-3 overflow-y-scroll scrollbar-hidden">
 		<div>
-			<div class=" mb-2 text-sm font-medium">{$i18n.t('Database')}</div>
+			<div class=" mb-2 text-lg font-medium">{$i18n.t('Database')}</div>
 
 			<input
 				id="config-json-input"
@@ -194,3 +199,19 @@
 
 	</div> -->
 </form>
+
+<div>
+	<div class="text-lg font-semibold mb-2 mt-10">
+		{$i18n.t('Generate product embeddings')}
+	</div>
+	<form class="flex flex-col justify-between space-y-3 text-sm"
+		  on:submit|preventDefault={async () => generateEmbeddingsHandler(localStorage.token, model, productId, productText)}>
+		<input id="db_model" type="text" bind:value="{model}" placeholder="LLM model for embeddings" class="mb-5 mt-5">
+		<input id="db_product_id" type="text" bind:value="{productId}" placeholder="Product ID" class="mb-5">
+		<Textarea bind:value="{productText}" placeholder="{$i18n.t('Product text')}" />
+		<div class="text-center">
+			<input type="submit" value="{$i18n.t('Generate')}" class="button w-fit mt-5">
+		</div>
+	</form>
+</div>
+

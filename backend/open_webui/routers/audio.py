@@ -923,6 +923,8 @@ def transcription(
         "audio/*",
         "video/webm",
     ]
+    print(f"Supported content types: {supported_content_types}")
+    print(f"File content type: {file.content_type}")
 
     if not any(
         fnmatch(file.content_type, content_type)

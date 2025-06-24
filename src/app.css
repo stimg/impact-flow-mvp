@@ -43,17 +43,42 @@ code {
 .button {
 	@apply  text-white dark:text-black
 	disabled:bg-gray-300 disabled:dark:bg-gray-800
-	bg-emerald-500 hover:bg-emerald-600
-	dark:bg-emerald-600 dark:hover:bg-emerald-400
+	bg-teal-500 hover:bg-teal-600
+	dark:bg-teal-600 dark:hover:bg-teal-400
     rounded-full px-3.5 py-1.5 transition
     disabled:cursor-not-allowed;
 }
 
 .svg-button {
-	@apply text-emerald-500 hover:text-emerald-600
-	dark:text-emerald-600 dark:hover:text-emerald-400
+	@apply text-teal-500 hover:text-teal-600
+	dark:text-teal-600 dark:hover:text-teal-400
     transition rounded-full p-1.5 mr-0.5 self-center;
 }
+
+.banner-info {
+	@apply text-white
+	bg-indigo-500 dark:bg-indigo-800
+	border-indigo-800 dark:border-indigo-500;
+}
+
+.banner-success {
+	@apply text-white
+	bg-teal-500 dark:bg-teal-800
+	border-teal-800 dark:border-teal-500;
+}
+
+.banner-warning {
+	@apply text-white
+	bg-amber-500 dark:bg-amber-800
+	border-amber-800 dark:border-amber-500;
+}
+
+.banner-error {
+	@apply text-white
+	bg-rose-500 dark:bg-rose-800
+	border-rose-800 dark:border-rose-500;
+}
+
 
 .font-secondary {
 	font-family: 'InstrumentSerif', sans-serif;

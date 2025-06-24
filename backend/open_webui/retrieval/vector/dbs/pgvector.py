@@ -1,6 +1,8 @@
 from typing import Optional, List, Dict, Any
 import logging
 import json
+
+from pydantic.v1 import UUID4
 from sqlalchemy import (
     func,
     literal,
@@ -11,6 +13,7 @@ from sqlalchemy import (
     Integer,
     MetaData,
     LargeBinary,
+    Uuid,
     select,
     text,
     Text,
@@ -69,6 +72,21 @@ class DocumentChunk(Base):
     else:
         text = Column(Text, nullable=True)
         vmetadata = Column(MutableDict.as_mutable(JSONB), nullable=True)
+
+
+class ProductChunk(Base):
+    __tablename__ = "product_chunks"
+
+    chunk_id = Column(Uuid, nullable=False, primary_key=True)
+    product_id = Column(Uuid, nullable=False)
+    embedding = Column(Vector(dim=1024), nullable=True)
+
+    if PGVECTOR_PGCRYPTO:
+        chunk_text = Column(LargeBinary, nullable=True)
+        metadata = Column(LargeBinary, nullable=True)
+    else:
+        chunk_text = Column(Text, nullable=True)
+        metadata = Column(MutableDict.as_mutable(JSONB), nullable=True)
 
 
 class PgvectorClient(VectorDBBase):
@@ -223,6 +241,57 @@ class PgvectorClient(VectorDBBase):
                 self.session.commit()
                 log.info(
                     f"Inserted {len(new_items)} items into collection '{collection_name}'."
+                )
+        except Exception as e:
+            self.session.rollback()
+            log.exception(f"Error during insert: {e}")
+            raise
+
+    def insert_product(self, product_id: str, items: List[VectorItem]) -> None:
+        try:
+            if PGVECTOR_PGCRYPTO:
+                for item in items:
+                    # Use raw SQL for BYTEA/pgcrypto
+                    self.session.execute(
+                        text(
+                            """
+                            INSERT INTO product_chunks
+                            (chunk_id, product_id, chunk_text, embedding, vmetadata)
+                            VALUES (
+                                :id, :product_id, :embedding,
+                                pgp_sym_encrypt(:chunk_text, :key),
+                                pgp_sym_encrypt(:metadata::text, :key)
+                            )
+                            ON CONFLICT (id) DO NOTHING
+                        """
+                        ),
+                        {
+                            "chunk_id": item["chunk_id"],
+                            "product_id": product_id,
+                            "chunk_text": item["chunk_text"],
+                            "embedding": item["embedding"],
+                            "metadata": json.dumps(item["metadata"]),
+                            "key": PGVECTOR_PGCRYPTO_KEY,
+                        },
+                    )
+                self.session.commit()
+                log.info(f"Encrypted & inserted {len(items)} into '{product_id}'")
+
+            else:
+                new_items = []
+                for item in items:
+                    new_chunk = ProductChunk(
+                        chunk_id=item["chunk_id"],
+                        product_id=product_id,
+                        embedding=item["embedding"],
+                        chunk_text=item["chunk_text"],
+                        metadata=item["metadata"],
+                    )
+                    new_items.append(new_chunk)
+                self.session.bulk_save_objects(new_items)
+                self.session.commit()
+                log.info(
+                    f"Inserted {len(items)} items into product '{product_id}'."
                 )
         except Exception as e:
             self.session.rollback()
