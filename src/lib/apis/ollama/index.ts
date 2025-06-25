@@ -303,33 +303,6 @@ export const generateEmbeddings = async (token: string = '', model: string, text
 	return res;
 };
 
-export const createProductEmbeddings = async (token: string = '', productId: string, model: string, text: string) => {
-	let error = null;
-
-	const res = await fetch(`${OLLAMA_API_BASE_URL}/api/product/embeddings`, {
-		method: 'POST',
-		headers: {
-			Accept: 'application/json',
-			'Content-Type': 'application/json',
-			Authorization: `Bearer ${token}`
-		},
-		body: JSON.stringify({
-			model,
-			productId,
-			text
-		})
-	}).catch((err) => {
-		error = err;
-		return null;
-	});
-
-	if (error) {
-		throw error;
-	}
-
-	return res;
-};
-
 export const generateTextCompletion = async (token: string = '', model: string, text: string) => {
 	let error = null;
 

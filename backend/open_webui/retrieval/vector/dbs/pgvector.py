@@ -83,10 +83,10 @@ class ProductChunk(Base):
 
     if PGVECTOR_PGCRYPTO:
         chunk_text = Column(LargeBinary, nullable=True)
-        metadata = Column(LargeBinary, nullable=True)
+        vmetadata = Column(LargeBinary, nullable=True)
     else:
         chunk_text = Column(Text, nullable=True)
-        metadata = Column(MutableDict.as_mutable(JSONB), nullable=True)
+        vmetadata = Column(MutableDict.as_mutable(JSONB), nullable=True)
 
 
 class PgvectorClient(VectorDBBase):
@@ -247,7 +247,7 @@ class PgvectorClient(VectorDBBase):
             log.exception(f"Error during insert: {e}")
             raise
 
-    def insert_product(self, product_id: str, items: List[VectorItem]) -> None:
+    def insert_product_chunks(self, product_id: str, items: List[VectorItem]) -> None:
         try:
             if PGVECTOR_PGCRYPTO:
                 for item in items:
@@ -270,7 +270,7 @@ class PgvectorClient(VectorDBBase):
                             "product_id": product_id,
                             "chunk_text": item["chunk_text"],
                             "embedding": item["embedding"],
-                            "metadata": json.dumps(item["metadata"]),
+                            "vmetadata": json.dumps(item["metadata"]),
                             "key": PGVECTOR_PGCRYPTO_KEY,
                         },
                     )
@@ -285,7 +285,7 @@ class PgvectorClient(VectorDBBase):
                         product_id=product_id,
                         embedding=item["embedding"],
                         chunk_text=item["chunk_text"],
-                        metadata=item["metadata"],
+                        vmetadata=item["metadata"],
                     )
                     new_items.append(new_chunk)
                 self.session.bulk_save_objects(new_items)
@@ -614,6 +614,47 @@ class PgvectorClient(VectorDBBase):
             log.exception(f"Error during delete: {e}")
             raise
 
+    def delete_product_chunks(
+        self,
+        product_id: str,
+        ids: Optional[List[str]] = None,
+        filter: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        try:
+            if PGVECTOR_PGCRYPTO:
+                wheres = [ProductChunk.product_id == product_id]
+                if ids:
+                    wheres.append(ProductChunk.product_id.in_(ids))
+                if filter:
+                    for key, value in filter.items():
+                        wheres.append(
+                            pgcrypto_decrypt(
+                                ProductChunk.vmetadata, PGVECTOR_PGCRYPTO_KEY, JSONB
+                            )[key].astext
+                            == str(value)
+                        )
+                stmt = ProductChunk.__table__.delete().where(*wheres)
+                result = self.session.execute(stmt)
+                deleted = result.rowcount
+            else:
+                query = self.session.query(ProductChunk).filter(
+                    ProductChunk.product_id == product_id
+                )
+                if ids:
+                    query = query.filter(ProductChunk.product_id.in_(ids))
+                if filter:
+                    for key, value in filter.items():
+                        query = query.filter(
+                            ProductChunk.vmetadata[key].astext == str(value)
+                        )
+                deleted = query.delete(synchronize_session=False)
+            self.session.commit()
+            log.info(f"Deleted {deleted} chunks from product '{product_id}'.")
+        except Exception as e:
+            self.session.rollback()
+            log.exception(f"Error during delete: {e}")
+            raise
+
     def reset(self) -> None:
         try:
             deleted = self.session.query(DocumentChunk).delete()
@@ -642,6 +683,23 @@ class PgvectorClient(VectorDBBase):
             log.exception(f"Error checking collection existence: {e}")
             return False
 
+    def has_product(self, product_id: str) -> bool:
+        try:
+            exists = (
+                self.session.query(ProductChunk)
+                .filter(ProductChunk.product_id == product_id)
+                .first()
+                is not None
+            )
+            return exists
+        except Exception as e:
+            log.exception(f"Error checking product existence: {e}")
+            return False
+
     def delete_collection(self, collection_name: str) -> None:
         self.delete(collection_name)
         log.info(f"Collection '{collection_name}' deleted.")
+
+    def delete_product(self, product_id: str) -> None:
+        self.delete_product_chunks(product_id)
+        log.info(f"Embeddings for product '{product_id}' deleted.")

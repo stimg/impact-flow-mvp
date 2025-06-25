@@ -41,7 +41,7 @@ code {
 }
 
 .button {
-	@apply  text-white dark:text-black
+	@apply  text-white
 	disabled:bg-gray-300 disabled:dark:bg-gray-800
 	bg-teal-500 hover:bg-teal-600
 	dark:bg-teal-600 dark:hover:bg-teal-400
@@ -266,6 +266,10 @@ input::-webkit-inner-spin-button {
 
 input[type='number'] {
 	-moz-appearance: textfield; /* Firefox */
+}
+
+input[type='text'] {
+	@apply rounded-lg px-3.5 py-2 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden
 }
 
 .katex-display {

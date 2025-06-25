@@ -9,7 +9,7 @@ import asyncio
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Iterator, List, Optional, Sequence, Union
+from typing import Iterator, List, Optional, Sequence, Union, Dict
 
 from fastapi import (
     Depends,
@@ -1304,11 +1304,12 @@ def save_product_to_vector_db(
     texts = [doc.page_content for doc in docs]
 
     try:
-        if VECTOR_DB_CLIENT.has_product(id=product_id):
+        if VECTOR_DB_CLIENT.has_product(product_id=product_id):
             log.info(f"product id {product_id} already exists")
+            print(f"Overwrite {overwrite}")
 
             if overwrite:
-                VECTOR_DB_CLIENT.delete_product(id=product_id)
+                VECTOR_DB_CLIENT.delete_product(product_id=product_id)
                 log.info(f"deleting existing product {product_id}")
             elif add is False:
                 log.info(
@@ -1353,6 +1354,17 @@ def save_product_to_vector_db(
             user=user,
         )
 
+        # Add embedding engine and model details to metadata
+        metadata = {
+            **(metadata if metadata else {}),
+            "embedding_config": json.dumps(
+                {
+                    "engine": request.app.state.config.RAG_EMBEDDING_ENGINE,
+                    "model": request.app.state.config.RAG_EMBEDDING_MODEL,
+                }
+            ),
+        }
+
         items = [
             {
                 "chunk_id": str(uuid.uuid4()),
@@ -1364,7 +1376,7 @@ def save_product_to_vector_db(
             for idx, text in enumerate(texts)
         ]
 
-        VECTOR_DB_CLIENT.insert_product(
+        VECTOR_DB_CLIENT.insert_product_chunks(
             product_id=product_id,
             items=items,
         )
@@ -1584,6 +1596,12 @@ class ProcessTextForm(BaseModel):
     content: str
     collection_name: Optional[str] = None
 
+class ProcessProductForm(BaseModel):
+    product_id: str
+    content: str
+    metadata: Optional[Dict[str, Union[str, int, bool]]] = None
+    overwrite: bool = False
+
 
 @router.post("/process/text")
 def process_text(
@@ -1610,6 +1628,41 @@ def process_text(
             "status": True,
             "collection_name": collection_name,
             "content": text_content,
+        }
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ERROR_MESSAGES.DEFAULT(),
+        )
+
+
+@router.post("/process/product")
+def process_product(
+    request: Request,
+    form_data: ProcessProductForm,
+    user=Depends(get_verified_user),
+):
+    product_id = form_data.product_id
+    if product_id is None:
+        product_id = calculate_sha256_string(form_data.content)
+
+    docs = [
+        Document(
+            page_content=form_data.content,
+            metadata={
+                **form_data.metadata,
+                "created_by": user.id
+            }
+        )
+    ]
+    text_content = form_data.content
+    log.debug(f"text_content: {text_content}")
+
+    result = save_product_to_vector_db(request, docs, product_id, form_data.metadata, form_data.overwrite, user=user)
+    if result:
+        return {
+            "status": True,
+            "product_name": form_data.metadata["name"],
         }
     else:
         raise HTTPException(

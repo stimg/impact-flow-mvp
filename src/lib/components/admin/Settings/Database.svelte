@@ -2,20 +2,23 @@
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 
-	import { downloadDatabase, downloadLiteLLMConfig } from '$lib/apis/utils';
+	import { downloadDatabase } from '$lib/apis/utils';
 	import { onMount, getContext } from 'svelte';
-	import { config, user } from '$lib/stores';
+	import { config } from '$lib/stores';
 	import { toast } from 'svelte-sonner';
 	import { getAllUserChats } from '$lib/apis/chats';
 	import { exportConfig, importConfig } from '$lib/apis/configs';
 	import Textarea from "$lib/components/common/Textarea.svelte";
+	import Checkbox from '$lib/components/common/Checkbox.svelte';
+	import Switch from "$lib/components/common/Switch.svelte";
 
 	const i18n = getContext('i18n');
 
 	export let saveHandler: Function;
-	export let generateEmbeddingsHandler: (token: string, model: string, id: string, text: string) => void;
-	export let model = 'bge-m3';
+	export let generateEmbeddingsHandler: (token: string, id: string, content: string, metadata: object, overwrite: boolean) => void;
+	export let overwrite = true;
 	export let productId = '';
+	export let productName = '';
 	export let productText = '';
 
 	const exportAllUserChats = async () => {
@@ -24,6 +27,10 @@
 		});
 		saveAs(blob, `all-chats-export-${Date.now()}.json`);
 	};
+
+	const getMetadata = () => ({
+		name: productName,
+	})
 
 	onMount(async () => {
 		// permissions = await getUserPermissions(localStorage.token);
@@ -205,11 +212,17 @@
 		{$i18n.t('Generate product embeddings')}
 	</div>
 	<form class="flex flex-col justify-between space-y-3 text-sm"
-		  on:submit|preventDefault={async () => generateEmbeddingsHandler(localStorage.token, model, productId, productText)}>
-		<input id="db_model" type="text" bind:value="{model}" placeholder="LLM model for embeddings" class="mb-5 mt-5">
-		<input id="db_product_id" type="text" bind:value="{productId}" placeholder="Product ID" class="mb-5">
+		  on:submit|preventDefault={async () => generateEmbeddingsHandler(localStorage.token, productId, productText, getMetadata(), overwrite)}>
+		<input id="db_product_id" type="text" bind:value="{productId}" placeholder="Product ID">
+		<input id="db_product_name" type="text" bind:value="{productName}" placeholder="Product Name">
 		<Textarea bind:value="{productText}" placeholder="{$i18n.t('Product text')}" />
-		<div class="text-center">
+		<div class="mb-2.5 mt-3 flex justify-center">
+			<div class="text-sm font-medium mr-5">
+				{$i18n.t('Overwrite existing')}
+			</div>
+			<Switch bind:state={overwrite} />
+		</div>
+ 		<div class="text-center">
 			<input type="submit" value="{$i18n.t('Generate')}" class="button w-fit mt-5">
 		</div>
 	</form>
