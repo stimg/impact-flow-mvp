@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterator, List, Optional, Sequence, Union, Dict
 
+import numpy as np
 from fastapi import (
     Depends,
     FastAPI,
@@ -1265,13 +1266,13 @@ def save_docs_to_vector_db(
 
 def save_product_to_vector_db(
     request: Request,
-    docs,
     product_id,
+    docs,
     metadata: Optional[dict] = None,
     overwrite: bool = False,
     split: bool = True,
     add: bool = False,
-    user=None,
+    user = None,
 ) -> bool:
     # Check if entries with the same hash (metadata.hash) already exist
     if split:
@@ -1301,7 +1302,18 @@ def save_product_to_vector_db(
     if len(docs) == 0:
         raise ValueError(ERROR_MESSAGES.EMPTY_CONTENT)
 
+    # Extract content for all documents
     texts = [doc.page_content for doc in docs]
+
+    # Merge global metadata with the local document metadata
+    # We pass local section info to each section chunk
+    doc_metadata = [
+        {
+            **doc.metadata,
+            **(metadata if metadata else {}),
+        }
+        for doc in docs
+    ]
 
     try:
         if VECTOR_DB_CLIENT.has_product(product_id=product_id):
@@ -1354,24 +1366,13 @@ def save_product_to_vector_db(
             user=user,
         )
 
-        # Add embedding engine and model details to metadata
-        metadata = {
-            **(metadata if metadata else {}),
-            "embedding_config": json.dumps(
-                {
-                    "engine": request.app.state.config.RAG_EMBEDDING_ENGINE,
-                    "model": request.app.state.config.RAG_EMBEDDING_MODEL,
-                }
-            ),
-        }
-
         items = [
             {
                 "chunk_id": str(uuid.uuid4()),
                 "product_id": product_id,
                 "chunk_text": text,
                 "embedding": embeddings[idx],
-                "metadata": metadata,
+                "metadata": doc_metadata[idx],
             }
             for idx, text in enumerate(texts)
         ]
@@ -1597,7 +1598,7 @@ class ProcessTextForm(BaseModel):
     collection_name: Optional[str] = None
 
 class ProcessProductForm(BaseModel):
-    product_id: str
+    id: str
     content: str
     metadata: Optional[Dict[str, Union[str, int, bool]]] = None
     overwrite: bool = False
@@ -1642,23 +1643,32 @@ def process_product(
     form_data: ProcessProductForm,
     user=Depends(get_verified_user),
 ):
-    product_id = form_data.product_id
-    if product_id is None:
-        product_id = calculate_sha256_string(form_data.content)
+    # IMPORTANT: We pass all product sections as JSON in the metadata field
+    # not as text in the content field. This allows us to extract product sections.
 
+    # Generate UUID for the new product
+    id = form_data.id or uuid.uuid4()
+
+    # Create common metadata for all product sections
+    metadata = {
+        "name": form_data.metadata["name"],
+        "reference_link": form_data.metadata["reference_link"],
+        "source": form_data.metadata["source"],
+        "created_by": user.id
+    }
+
+    # Extract section names and contents
     docs = [
         Document(
-            page_content=form_data.content,
-            metadata={
-                **form_data.metadata,
-                "created_by": user.id
+            page_content=form_data.metadata[section],
+            # Local metadata for each section
+            metadata = {
+                "section": section
             }
-        )
+        ) for section in form_data.metadata
     ]
-    text_content = form_data.content
-    log.debug(f"text_content: {text_content}")
 
-    result = save_product_to_vector_db(request, docs, product_id, form_data.metadata, form_data.overwrite, user=user)
+    result = save_product_to_vector_db(request, id, docs, metadata, form_data.overwrite, split=False, user=user)
     if result:
         return {
             "status": True,

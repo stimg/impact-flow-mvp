@@ -129,7 +129,6 @@ async def send_post_request(
         session = aiohttp.ClientSession(
             trust_env=True, timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT)
         )
-
         r = await session.post(
             url,
             data=payload,

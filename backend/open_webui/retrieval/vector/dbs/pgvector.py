@@ -1,8 +1,6 @@
 from typing import Optional, List, Dict, Any
 import logging
 import json
-
-from pydantic.v1 import UUID4
 from sqlalchemy import (
     func,
     literal,

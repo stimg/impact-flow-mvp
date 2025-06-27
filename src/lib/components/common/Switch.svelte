@@ -12,8 +12,8 @@
 <Switch.Root
 	bind:checked={state}
 	{id}
-	class="flex h-5 min-h-5 w-9 shrink-0 cursor-pointer items-center rounded-full px-[3px] mx-[1px] transition
-		outline outline-1 disabled:outline-gray-400 disabled:cursor-not-allowed
+	class="flex h-5 min-h-5 w-9 shrink-0 cursor-pointer items-center disabled:cursor-not-allowed
+		outline disabled:outline-gray-400 rounded-full px-[3px] mx-[1px] transition
 		{state
 		? 'bg-teal-500 dark:bg-teal-600 outline-teal-600 dark:outline-teal-500'
 		: 'bg-gray-200 dark:bg-gray-800 outline-gray-300 dark:outline-gray-700'}"

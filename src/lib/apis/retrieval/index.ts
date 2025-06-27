@@ -333,8 +333,8 @@ export const processFile = async (
 
 export const processProduct = async (
 	token: string,
-	product_id: string,
-	content: string,
+	id: string,
+	content: string = '' ,
 	metadata = {},
 	overwrite: boolean = false
 ) => {
@@ -347,8 +347,9 @@ export const processProduct = async (
 			'Content-Type': 'application/json',
 			authorization: `Bearer ${token}`
 		},
+
 		body: JSON.stringify({
-			product_id,
+			id,
 			content,
 			metadata,
 			overwrite

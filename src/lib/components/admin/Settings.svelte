@@ -506,8 +506,8 @@
 				saveHandler={() => {
 					toast.success($i18n.t('Settings saved successfully!'));
 				}}
-				generateEmbeddingsHandler={async (token, id, content, metadata = {}, overwrite) => {
-					const res = await processProduct(token, id, content, metadata, overwrite);
+				generateEmbeddingsHandler={async (token, id, metadata, overwrite) => {
+					const res = await processProduct(token, id, '', metadata, overwrite);
 					if (res.status) {
 						toast.success($i18n.t(`Successfully generated embeddings for product ${res.product_name}!`));
 					} else {

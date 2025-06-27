@@ -9,17 +9,64 @@
 	import { getAllUserChats } from '$lib/apis/chats';
 	import { exportConfig, importConfig } from '$lib/apis/configs';
 	import Textarea from "$lib/components/common/Textarea.svelte";
-	import Checkbox from '$lib/components/common/Checkbox.svelte';
 	import Switch from "$lib/components/common/Switch.svelte";
+
+	type Product = {
+		id: string;
+		name: string;
+		short_description: string;
+		target_audience?: string;
+		tags?: string;
+		categories?: string;
+		product_details: string;
+		application_area?: string;
+		ingredients?: string;
+		formulation_origin?: string;
+		history?: string;
+		user_experience?: string;
+		intake_recommendation?: string;
+		reference_link?: string;
+		document_url?: string;
+		source?: string;
+	}
 
 	const i18n = getContext('i18n');
 
 	export let saveHandler: Function;
 	export let generateEmbeddingsHandler: (token: string, id: string, content: string, metadata: object, overwrite: boolean) => void;
 	export let overwrite = true;
-	export let productId = '';
-	export let productName = '';
-	export let productText = '';
+	export let id = '';
+	export let name = '';
+	export let short_description = '';
+	export let product_details = '';
+	export let target_audience = '';
+	export let tags = '';
+	export let categories = '';
+	export let intake_recommendation = '';
+	export let application_area = '';
+	export let ingredients = '';
+	export let formulation_origin = '';
+	export let history = '';
+	export let user_experience = '';
+	export let source = 'https://www.ethno-health.com';
+	export let reference_link = '';
+
+	const getMetadata = (): Product => ({
+		name: `${$i18n.t('Product Name')}: ${name}`,
+		short_description: `${$i18n.t('Short description')}: ${short_description}`,
+		product_details: `${$i18n.t('Product details')}: ${product_details}`,
+		target_audience: `${$i18n.t('Target audience')}: ${target_audience}`,
+		tags: `${$i18n.t('Tags')}: ${tags}`,
+		categories: `${$i18n.t('Categories')}: ${categories}`,
+		intake_recommendation: `${$i18n.t('Intake recommendation')}: ${intake_recommendation}`,
+		application_area: `${$i18n.t('Application area')}: ${application_area}`,
+		ingredients: `${$i18n.t('Ingredients')}: ${ingredients}`,
+		formulation_origin: `${$i18n.t('Formulation origin')}: ${formulation_origin}`,
+		history: `${$i18n.t('History')}: ${history}`,
+		user_experience: `${$i18n.t('User experience')}: ${user_experience}`,
+		source:	`${$i18n.t('Manufacturers homepage')}: ${source}`,
+		reference_link: `${$i18n.t('Product webpage')}: ${reference_link}`,
+	})
 
 	const exportAllUserChats = async () => {
 		let blob = new Blob([JSON.stringify(await getAllUserChats(localStorage.token))], {
@@ -27,10 +74,6 @@
 		});
 		saveAs(blob, `all-chats-export-${Date.now()}.json`);
 	};
-
-	const getMetadata = () => ({
-		name: productName,
-	})
 
 	onMount(async () => {
 		// permissions = await getUserPermissions(localStorage.token);
@@ -212,10 +255,50 @@
 		{$i18n.t('Generate product embeddings')}
 	</div>
 	<form class="flex flex-col justify-between space-y-3 text-sm"
-		  on:submit|preventDefault={async () => generateEmbeddingsHandler(localStorage.token, productId, productText, getMetadata(), overwrite)}>
-		<input id="db_product_id" type="text" bind:value="{productId}" placeholder="Product ID">
-		<input id="db_product_name" type="text" bind:value="{productName}" placeholder="Product Name">
-		<Textarea bind:value="{productText}" placeholder="{$i18n.t('Product text')}" />
+		  on:submit|preventDefault={async () => generateEmbeddingsHandler(localStorage.token, id, getMetadata(), overwrite)}>
+
+		<label class="mb-0" for="db_product_id">{$i18n.t('Product ID')}</label>
+		<input type="text" bind:value="{id}">
+
+		<label class="mb-0" for="db_product_name">{$i18n.t('Product name')}</label>
+		<input type="text" bind:value="{name}">
+
+		<label class="mb-0" for="short_description">{$i18n.t('Short description')}</label>
+		<Textarea bind:value="{short_description}" />
+
+		<label class="mb-0" for="product_details">{$i18n.t('Product details')}</label>
+		<Textarea bind:value="{product_details}" />
+
+		<label class="mb-0" for="target_audience">{$i18n.t('Target audience')}</label>
+		<Textarea bind:value="{target_audience}" />
+
+		<label class="mb-0" for="application_area">{$i18n.t('Application area')}</label>
+		<Textarea bind:value="{application_area}" />
+
+		<label class="mb-0" for="formulation_origin">{$i18n.t('Formulation origin')}</label>
+		<Textarea bind:value="{formulation_origin}" />
+
+		<label class="mb-0" for="intake_recommendation">{$i18n.t('Intake recommendation')}</label>
+		<Textarea bind:value="{intake_recommendation}" />
+
+		<label class="mb-0" for="ingredients">{$i18n.t('Ingredients')}</label>
+		<Textarea bind:value="{ingredients}" />
+
+		<label class="mb-0" for="history">{$i18n.t('History')}</label>
+		<Textarea bind:value="{history}" />
+
+		<label class="mb-0" for="user_experience">{$i18n.t('User experience')}</label>
+		<Textarea bind:value="{user_experience}" />
+
+		<label class="mb-0" for="Tags">{$i18n.t('Tags')}</label>
+		<input type="text" bind:value="{tags}">
+
+		<label class="mb-0" for="Categories">{$i18n.t('Categories')}</label>
+		<input type="text" bind:value="{categories}">
+
+		<label class="mb-0" for="reference_link">{$i18n.t('Product webpage')}</label>
+		<input type="text" bind:value="{reference_link}">
+
 		<div class="mb-2.5 mt-3 flex justify-center">
 			<div class="text-sm font-medium mr-5">
 				{$i18n.t('Overwrite existing')}
@@ -227,4 +310,3 @@
 		</div>
 	</form>
 </div>
-
