@@ -12,7 +12,6 @@
 	import Switch from "$lib/components/common/Switch.svelte";
 
 	type Product = {
-		id: string;
 		name: string;
 		short_description: string;
 		target_audience?: string;
@@ -258,7 +257,7 @@
 		  on:submit|preventDefault={async () => generateEmbeddingsHandler(localStorage.token, id, getMetadata(), overwrite)}>
 
 		<label class="mb-0" for="db_product_id">{$i18n.t('Product ID')}</label>
-		<input type="text" bind:value="{id}">
+		<input type="text" bind:value="{id}" placeholder="{$i18n.t('Wird ein neues Produkt angelegt, wenn leer')}">
 
 		<label class="mb-0" for="db_product_name">{$i18n.t('Product name')}</label>
 		<input type="text" bind:value="{name}">
@@ -288,16 +287,16 @@
 		<Textarea bind:value="{history}" />
 
 		<label class="mb-0" for="user_experience">{$i18n.t('User experience')}</label>
-		<Textarea bind:value="{user_experience}" />
+		<Textarea bind:value="{user_experience}" placeholder="ℹ️ {$i18n.t('Zum Beispiel: Monika S., 57 Jahre. \"Es ist erstaunlich, wie einfach es sein kann, für die eigene Gesundheit etwas zu tun... \"')}" />
 
 		<label class="mb-0" for="Tags">{$i18n.t('Tags')}</label>
-		<input type="text" bind:value="{tags}">
+		<input type="text" bind:value="{tags}" placeholder="ℹ️ {$i18n.t('Zum Beispiel: Shake, Shape Classic, Abnehmen, Wohlfühlen , Konzept')}">
 
 		<label class="mb-0" for="Categories">{$i18n.t('Categories')}</label>
-		<input type="text" bind:value="{categories}">
+		<input type="text" bind:value="{categories}" placeholder="ℹ️ {$i18n.t('Zum Beispiel: Tibetische Rezeptur Lung')}">
 
 		<label class="mb-0" for="reference_link">{$i18n.t('Product webpage')}</label>
-		<input type="text" bind:value="{reference_link}">
+		<input type="text" bind:value="{reference_link}" placeholder="ℹ️ {$i18n.t('Direkter Link zum Produkt im Shop oder Webseite')}">
 
 		<div class="mb-2.5 mt-3 flex justify-center">
 			<div class="text-sm font-medium mr-5">
@@ -306,6 +305,7 @@
 			<Switch bind:state={overwrite} />
 		</div>
  		<div class="text-center">
+			<input type="reset" value="{$i18n.t('Zurücksetzen')}" class="button w-fit mt-5 mr-3">
 			<input type="submit" value="{$i18n.t('Generate')}" class="button w-fit mt-5">
 		</div>
 	</form>

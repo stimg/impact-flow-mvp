@@ -8,7 +8,7 @@
 	const dispatch = createEventDispatcher();
 
 	import { config, user, models as _models, temporaryChatEnabled } from '$lib/stores';
-	import { sanitizeResponseContent, extractCurlyBraceWords } from '$lib/utils';
+	import {sanitizeResponseContent, extractCurlyBraceWords, getUserNameFromFullName} from '$lib/utils';
 	import { WEBUI_BASE_URL } from '$lib/constants';
 
 	import Suggestions from './Suggestions.svelte';
@@ -17,8 +17,7 @@
 	import MessageInput from './MessageInput.svelte';
 
 	const i18n = getContext('i18n');
-	const nameRegex = /^(.+?)(?=\s+(?:von(?:\s+(?:der|den|dem))?|van(?:\s+(?:der|den))?|zu|zur|zum|vom|de|del|du)\b|\s+\S+$)/;
-	const username = ($user?.name || 'Gast').match(nameRegex)?.[1] || '';
+	const username = getUserNameFromFullName($user?.name);
 
 	export let transparentBackground = false;
 

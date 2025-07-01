@@ -1389,3 +1389,11 @@ export const slugify = (str: string): string => {
 			.toLowerCase()
 	);
 };
+
+export const getUserNameFromFullName = (username: string | undefined) => {
+	if (!username) return '';
+
+	const nameRegex = /^(.+?)(?=\s+(?:von(?:\s+(?:der|den|dem))?|van(?:\s+(?:der|den))?|zu|zur|zum|vom|de|del|du)\b|\s+\S+$)/;
+	return (username || 'Gast').match(nameRegex)?.[1] || '';
+
+}
