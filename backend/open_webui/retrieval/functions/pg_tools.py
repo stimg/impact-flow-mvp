@@ -2,11 +2,8 @@ from pydantic import BaseModel, Field
 import json, requests
 import psycopg2
 import numpy as np
-import ollama
+from ollama import Client
 from psycopg2.extras import RealDictCursor
-from langchain.agents import initialize_agent, Tool
-from langchain.llms import OpenAI
-
 
 
 class Pipe:
@@ -102,57 +99,12 @@ class Pipe:
         except Exception as e:
             return f"Database error: {e}"
 
-    def call_ollama(self, system_prompt, user_message):
-        response = ollama.chat(
-            model='phi4-mini',
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
-            ]
-        )
-        return response['message']['content']
-
-    def agent_loop(self, system_prompt, user_message):
-        # 1. Get LLM decision
-        llm_response = self.call_ollama(system_prompt, user_message)
-        try:
-            tool_call = json.loads(llm_response)
-            tool = tool_call.get("tool")
-            params = tool_call.get("parameters", {})
-
-            if tool == "get_product_list":
-                result = self.get_product_list(**params)
-            elif tool == "get_product_details":
-                result = self.get_product_details(**params)
-            else:
-                result = "Unknown tool"
-
-            # Optionally, you can ask the LLM to summarize the tool result for the user
-            print(f"TOOL RESULT: {result}")
-            # For a more agentic loop, send the tool result back as context
-            # and continue the conversation if needed
-
-        except Exception as e:
-            print("LLM Response (no tool call detected):", llm_response)
-
-    def get_product_list(self, categories: str = None):
-        if categories:
-            query_vector = self.generate_embedding(categories)
-            query = f"""
-                SELECT 
-                    product_id,
-                    embedding, 
-                    jsonb_object_agg(
-                        vmetadata->>'section',
-                        chunk_text
-                    ) AS product_info
-                FROM product_chunks 
-                WHERE section = 'categories' 
-                ORDER BY '{query_vector}' <#> embedding 
-                GROUP BY product_id
-            """
-        else:
-            query = f"""
+    def get_product_list(self):
+        """
+        Queries the PostgreSQL database.
+        It searches for all available products in the database.
+        """
+        query = """
                 SELECT
                     product_id,
                     jsonb_object_agg(
@@ -160,51 +112,91 @@ class Pipe:
                             chunk_text
                     ) AS product_info
                 FROM product_chunks
-                WHERE vmetadata->>'section' IN ('name', 'categories', 'short_description')
-                GROUP BY product_id;
-        """
+                WHERE vmetadata->>'section' IN ('name', 'categories', 'short_description', 'reference_link')
+                GROUP BY product_id; \
+                """
 
         results = self.query_db(query)
+
         return [
             {
-                "name": item["name"],
-                "categories": item["categories"],
-                "short_description": item["short_description"],
-            } for item in results
+                "Product ID": item["product_id"],
+                "Produktinformation": item["product_info"],
+            }
+            for item in results
         ]
 
-    def get_product_details(self, query):
+    def get_products_by_category(self, category: str):
         """
-        Queries the PostgreSQL database using the provided user message.
-        For example, it searches for a matching answer in the FAQ table.
+        Queries the PostgreSQL database using the optional categories list.
+        For example, it searches for all available products in the category or database.
         """
-        # Convert text to embedding for vector search
-        query_vector = self.generate_embedding(query)
-
         query = f"""
-            SELECT 
+            SELECT
                 product_id,
                 jsonb_object_agg(
                     vmetadata->>'section',
                     chunk_text
                 ) AS product_info
             FROM product_chunks
-            ORDER BY embedding <#> '{[query_vector]}'
-            LIMIT 1
+            WHERE product_id IN (
+                SELECT product_id
+                FROM product_chunks
+                WHERE vmetadata->>'section' = 'categories'
+                  AND chunk_text ILIKE '%Body%'
+            )
+                AND vmetadata->>'section' IN ('name', 'categories', 'short_description', 'reference_link')
+            GROUP BY product_id
         """
 
         results = self.query_db(query)
+        return [
+            {
+                "Product ID": item["product_id"],
+                "Produktinformation": item["product_info"],
+            }
+            for item in results
+        ]
+
+    def get_product_details(self, name):
+        """
+        Queries the PostgreSQL database using the provided product name.
+        For example, it searches for a matching product in the database.
+        """
+        vector = self.generate_embedding(name)
+
+        query = f"""
+            SELECT
+                product_id,
+                jsonb_object_agg(
+                    vmetadata->>'section',
+                    chunk_text
+                ) AS product_info
+            FROM product_chunks
+            WHERE product_id IN (
+                SELECT product_id
+                FROM product_chunks
+                WHERE vmetadata->>'section' = 'name'
+                ORDER BY embedding <#> '{vector}'
+                LIMIT 1
+            )
+            GROUP BY product_id
+        """
+
+        results = self.query_db(query)
+        print(f"Results: {results}")
 
         if not results:
             return "No matching product found in the database."
 
-        return [
-            {
-                "name": item["name"],
-                "categories": item["categories"],
-                "short_description": item["short_description"],
-            } for item in results
-        ]
+        product_info = results[0]["product_info"]
+        product_id = results[0]["product_id"]
+
+        print(f"Produkt details: {product_info}")
+        return {
+            "Product ID": product_id,
+            "Produktinformation": product_info,
+        }
 
     def pipe(self, body: dict, __user__: dict):
         """
@@ -221,55 +213,7 @@ class Pipe:
         if not messages:
             return "No messages provided in the request body."
 
-        functions = [
-            {
-                "name": "get_product_list",
-                "description": "Fetches a list of products. Use when the user asks about a available products or product categories.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "categories": {"categories": "string", "description": "Comma separated product categories (optional)"}
-                    }
-                }
-            },
-            {
-                "name": "get_product_details",
-                "description": "Fetches detailed information about a product. Use when the user refers to a specific product by name.",
-                # Make available if we use selection by ID not the semantic search by section
-                # "parameters": {
-                #     "type": "object",
-                #     "properties": {
-                #         "product_id": {"type": "string", "description": "Unique identifier of the product"}
-                #     },
-                #     "required": ["product_id"]
-                # }
-            }
-        ]
-
-        tools = [
-            Tool(
-                name="get_product_list",
-                func=self.get_product_list_tool,
-                description="Fetches products by category."
-            ),
-            Tool(
-                name="get_product_details",
-                func=self.get_product_details_tool,
-                description="Fetches details for a product by name."
-            ),
-        ]
-
-        llm = OpenAI(
-            model="phi4-mini",
-            messages=None,
-            tools = functions,
-            tool_choice = 'auto',
-            temperature = 0.2,
-        )
-
-        agent = initialize_agent(tools, llm, agent_type="openai-functions")
-
-    # Get system and user messages
+        # Get system and user messages
         for message in messages:
             if message.get("role", "") == "system":
                 system_message = message.get("content", "")
@@ -277,8 +221,101 @@ class Pipe:
             if message.get("role", "") == "user":
                 user_message = message.get("content", "")
 
-        # Query the PostgreSQL database for a related answer.
-        db_result = self.query_database(user_message)
+        tools = [
+            self.get_product_list,
+            self.get_product_details,
+            self.get_products_by_category,
+        ]
+
+        handlers = {
+            "get_product_list": self.get_product_list,
+            "get_products_by_category": self.get_products_by_category,
+            "get_product_details": self.get_product_details,
+        }
+
+        tools_schema = json.dumps(
+            [
+                {
+                    "name": "get_product_list",
+                    "description": "Fetches a list of products. Use when the user asks about available products.",
+                },
+                {
+                    "name": "get_products_by_category",
+                    "description": "Fetches a list of products in the category. Use when the user asks about products in the particular category.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "category": {
+                                "type": "string",
+                                "description": "Category",
+                            }
+                        },
+                        "required": ["category"],
+                    },
+                },
+                {
+                    "name": "get_product_details",
+                    "description": "Fetches detailed information about a product. Use when the user refers to a specific product by name.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Product name",
+                            }
+                        },
+                        "required": ["name"],
+                    },
+                },
+            ]
+        )
+
+        system_with_tools = (
+                "You are a product assistant.\n\n"
+                + "You have access to the following tools:\n"
+                + f"<|tool|>{tools_schema}</|tool|>\n\n"
+                + "Answer directly if you can do so.\n"
+                + "When needed, call one of the tools.\n\n"
+                + "Examples:\n"
+                + "User: Welche Produkte hast du im Sortiment hier?\n"
+                + 'Assistant: {"function": "get_product_list", "parameters": {}}\n\n'
+                + "User: Welche Produkte in der Kategorie Body & Clean hast du?\n"
+                + 'Assistant: {"function": "get_product_list", "parameters": {"category": "Body & Clean"}}\n\n'
+                + "User: Was weisst du über das Lung Produkt?\n"
+                + 'Assistant: {"function": "get_product_details", "parameters": {"name": "Lung"}}\n\n'
+        )
+
+        ollama = Client(
+            host="http://localhost:11434", headers={"Authorization": "Bearer ollama"}
+        )
+
+        response = ollama.chat(
+            model="phi4-mini",
+            messages=[
+                {"role": "system", "content": system_with_tools},
+                {"role": "user", "content": user_message},
+            ],
+            tools=tools,
+            format="json",
+        )
+
+        print(f"Chat Completion response: {response}")
+
+        content = json.loads(response["message"]["content"])
+        # print(f"Content: {content}")
+
+        if content:
+            name = content["function"]
+            parameters = content["parameters"]
+
+            print(f"Function: {name}")
+            print(f"Parameters: {parameters}")
+
+            db_result = handlers[name](**parameters)
+
+        else:
+            db_result = "No handler defined for this tool call."
+
         print(f"DB result: {db_result}")
 
         # Construct a prompt that includes both the user's request and the database query result.
@@ -287,7 +324,7 @@ class Pipe:
             f"CONTEXT: {db_result}\n\n"
             f"{self.valves.PROMPT}"
         )
-        print(f"System message: {system_message}")
+        # print(f"System message: {system_message}")
         # print(f"Prompt: {prompt}")
 
         del body["messages"]
@@ -309,6 +346,7 @@ class Pipe:
             },
         }
         # print(f"payload: {payload}")
+
         headers = {
             "Content-Type": "application/json",
         }

@@ -22,7 +22,7 @@
 
 	const classNames: Record<string, string> = {
 		info: 'banner-info',
-		success: 'banne-success',
+		success: 'banner-success',
 		warning: 'banner-warning',
 		error: 'banner-error'
 	};
@@ -49,7 +49,7 @@
 					{#if banner.url}
 						<div class="flex md:hidden group w-fit md:items-center">
 							<a
-								class="text-gray-700 dark:text-white text-xs font-semibold underline"
+								class="text-xs font-semibold underline"
 								href="/assets/files/whitepaper.pdf"
 								target="_blank">Learn More</a
 							>
@@ -75,7 +75,7 @@
 					{/if}
 				</div>
 
-				<div class="flex-1 text-sm text-gray-700 dark:text-white max-h-20 overflow-y-auto">
+				<div class="flex-1 text-sm max-h-20 overflow-y-auto">
 					{@html marked.parse(DOMPurify.sanitize(banner.content))}
 				</div>
 			</div>
@@ -83,7 +83,7 @@
 			{#if banner.url}
 				<div class="hidden md:flex group w-fit md:items-center">
 					<a
-						class="text-gray-700 dark:text-white text-xs font-semibold underline"
+						class="text-xs font-semibold underline"
 						href="/"
 						target="_blank">Learn More</a
 					>

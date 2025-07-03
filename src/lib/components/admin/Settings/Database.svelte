@@ -251,13 +251,15 @@
 
 <div>
 	<div class="text-lg font-semibold mb-2 mt-10">
-		{$i18n.t('Generate product embeddings')}
+		{$i18n.t('Neues Produkt anlegen')}
 	</div>
 	<form class="flex flex-col justify-between space-y-3 text-sm"
 		  on:submit|preventDefault={async () => generateEmbeddingsHandler(localStorage.token, id, getMetadata(), overwrite)}>
 
+<!--
 		<label class="mb-0" for="db_product_id">{$i18n.t('Product ID')}</label>
 		<input type="text" bind:value="{id}" placeholder="{$i18n.t('Wird ein neues Produkt angelegt, wenn leer')}">
+-->
 
 		<label class="mb-0" for="db_product_name">{$i18n.t('Product name')}</label>
 		<input type="text" bind:value="{name}">
