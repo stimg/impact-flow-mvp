@@ -1405,6 +1405,7 @@ async def chat_completion(
         return await process_chat_response(
             request, response, form_data, user, metadata, model, events, tasks
         )
+
     except Exception as e:
         log.debug(f"Error in chat completion: {e}")
         if metadata.get("chat_id") and metadata.get("message_id"):

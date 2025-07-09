@@ -44,12 +44,12 @@ if [[ "${USE_OLLAMA_DOCKER,,}" == "true" ]]; then
       sleep 1
     done
 
-    # Pull related ollama embedding model
+    # Pull embedding LLM
     ollama pull bge-m3
 
-    # Pull phi4-mini model
-    echo "Pulling phi4-mini model..."
-    ollama pull phi4-mini
+    # Pull LLM
+    echo "Pulling LLM..."
+    ollama pull qwen3:8b
 fi
 
 if [[ "${USE_CUDA_DOCKER,,}" == "true" ]]; then

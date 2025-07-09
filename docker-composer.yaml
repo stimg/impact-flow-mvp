@@ -1,0 +1,29 @@
+version: '3.8'
+services:
+  app:
+    image: impact-flow
+    build:
+      context: .
+      args:
+        USE_OLLAMA: true
+#        USE_CUDA: true
+
+#    platform: linux/amd64
+
+    secrets:
+      - db_url
+      - webui_secret_key
+
+    environment:
+      # Point to where Docker will mount secrets
+      DB_URL_FILE: /run/secrets/db_user
+      WEBUI_SECRET_KEY_FILE: /run/secrets/webui_secret_key
+    # Optional: Map ports, volumes as needed
+    ports:
+      - "8080:8080"
+
+secrets:
+  db_url:
+    file: ./secrets/db_url.txt
+  webui_secret_key:
+    file: ./secrets/webui_secret_key.txt
