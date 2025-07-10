@@ -16,8 +16,12 @@ class Pipe:
             default="bge-m3",
             description="Model to use for embeddings.",
         )
-        PROMPT: str = Field(
-            default="Basierend auf den obigen Informationen generiere eine abschließende Antwort.",
+        PROMPT_LIST: str = Field(
+            default="Folgende Punkte immer in einem Block zu rendern: Produktname, Kategorie, Kurzbeschreibung, Produktwebseite im Format [Produktname](https://www.ethno-health.com/artikeldetail/<produkt_link>), ---\n.",
+            description="System prompt for RAG.",
+        )
+        PROMPT_DETAILS: str = Field(
+            default="Folgende Pukte (wenn verfügbar) zu beachten: Produktname, Produktbeschreibung, Zielgruppe, Anwendung, Vorteile, Produktwebseite im Format [Produktname](https://www.ethno-health.com/<produkt_link>) immer zeigen.",
             description="System prompt for RAG.",
         )
         API_BASE_URL: str = Field(
@@ -38,12 +42,13 @@ class Pipe:
             default="postgres", description="PostgreSQL database name."
         )
 
+    ollama = Client(
+        host="http://localhost:11434",
+        headers={"Content-Type": "application/json", "Authorization": "Bearer ollama"},
+    )
+
     def __init__(self):
         self.valves = self.Valves()
-
-    def is_normalized(vec, tol=1e-6):
-        norm = np.linalg.norm(vec)
-        return abs(norm - 1.0) < tol
 
     def generate_embedding(self, text):
         res = requests.request(
@@ -66,8 +71,6 @@ class Pipe:
         embeddings = res.json()["embeddings"]
         vector = embeddings[0] or []
         # print(f"Embedding: {vector}")
-
-        # print(f"Embedding is normalized: {self.is_normalized(vector)}")
 
         return vector
 
@@ -105,26 +108,29 @@ class Pipe:
         It searches for all available products in the database.
         """
         query = """
-                SELECT
-                    product_id,
-                    jsonb_object_agg(
-                            vmetadata->>'section',
-                            chunk_text
-                    ) AS product_info
-                FROM product_chunks
-                WHERE vmetadata->>'section' IN ('name', 'categories', 'short_description', 'reference_link')
-                GROUP BY product_id; \
-                """
+            SELECT
+                product_id,
+                jsonb_object_agg(
+                        vmetadata->>'section',
+                        chunk_text
+                ) AS product_info
+            FROM product_chunks
+            WHERE vmetadata->>'section' IN ('name', 'categories', 'short_description', 'reference_link')
+            GROUP BY product_id;
+        """
 
         results = self.query_db(query)
 
-        return [
-            {
-                "Product ID": item["product_id"],
-                "Produktinformation": item["product_info"],
-            }
-            for item in results
-        ]
+        return {
+            "prompt": self.valves.PROMPT_LIST,
+            "data": [
+                {
+                    "Product ID": item["product_id"],
+                    "Produktinfo": item["product_info"],
+                }
+                for item in results
+            ],
+        }
 
     def get_products_by_category(self, category: str):
         """
@@ -150,13 +156,20 @@ class Pipe:
         """
 
         results = self.query_db(query)
-        return [
-            {
-                "Product ID": item["product_id"],
-                "Produktinformation": item["product_info"],
-            }
-            for item in results
-        ]
+        return {
+            "prompt": (
+                self.valves.PROMPT_LIST
+                if len(results) > 1
+                else self.valves.PROMPT_DETAILS
+            ),
+            "data": [
+                {
+                    "Product ID": item["product_id"],
+                    **item["product_info"],
+                }
+                for item in results
+            ],
+        }
 
     def get_product_details(self, name):
         """
@@ -184,18 +197,22 @@ class Pipe:
         """
 
         results = self.query_db(query)
-        print(f"Results: {results}")
+        # print(f"Results: {results}")
 
         if not results:
             return "No matching product found in the database."
 
-        product_info = results[0]["product_info"]
         product_id = results[0]["product_id"]
+        product_info = results[0]["product_info"]
 
         print(f"Produkt details: {product_info}")
+
         return {
-            "Product ID": product_id,
-            "Produktinformation": product_info,
+            "prompt": self.valves.PROMPT_DETAILS,
+            "data": {
+                "product_id": product_id,
+                **product_info,
+            },
         }
 
     def pipe(self, body: dict, __user__: dict):
@@ -205,6 +222,7 @@ class Pipe:
         constructs a prompt including the database result, and then sends the prompt to the API.
         """
         print(f"pipe: {__name__}")
+        # print(f"Body: {body}")
 
         # Extract the product from the last message.
         messages = body.get("messages", [])
@@ -221,6 +239,7 @@ class Pipe:
             if message.get("role", "") == "user":
                 user_message = message.get("content", "")
 
+        # Define variables for LLM
         tools = [
             self.get_product_list,
             self.get_product_details,
@@ -270,106 +289,84 @@ class Pipe:
             ]
         )
 
-        system_with_tools = (
-                "You are a product assistant.\n\n"
-                + "You have access to the following tools:\n"
-                + f"<|tool|>{tools_schema}</|tool|>\n\n"
-                + "Answer directly if you can do so.\n"
-                + "When needed, call one of the tools.\n\n"
-                + "Examples:\n"
-                + "User: Welche Produkte hast du im Sortiment hier?\n"
-                + 'Assistant: {"function": "get_product_list", "parameters": {}}\n\n'
-                + "User: Welche Produkte in der Kategorie Body & Clean hast du?\n"
-                + 'Assistant: {"function": "get_product_list", "parameters": {"category": "Body & Clean"}}\n\n'
-                + "User: Was weisst du über das Lung Produkt?\n"
-                + 'Assistant: {"function": "get_product_details", "parameters": {"name": "Lung"}}\n\n'
+        system_prompt_tools = (
+            "You are a product assistant.\n"
+            + "Answer directly if you can do so.\n\n"
+            + "You have access to the following tools:\n"
+            + f"<|tool|>{tools_schema}</|tool|>\n\n"
+            + "When needed, call one of the tools.\n\n"
+            + "Examples:\n"
+            + "User: Welche Produkte hast du im Sortiment hier?\n"
+            + 'Assistant: {"function": "get_product_list", "parameters": {}}\n\n'
+            + "User: Welche Produkte in der Kategorie Body & Clean hast du?\n"
+            + 'Assistant: {"function": "get_product_list", "parameters": {"category": "Body & Clean"}}\n\n'
+            + "User: Was weisst du über das Lung Produkt?\n"
+            + 'Assistant: {"function": "get_product_details", "parameters": {"name": "Lung"}}\n\n'
         )
 
-        ollama = Client(
-            host="http://localhost:11434", headers={"Authorization": "Bearer ollama"}
-        )
-
-        response = ollama.chat(
+        response = self.ollama.chat(
             model="phi4-mini",
             messages=[
-                {"role": "system", "content": system_with_tools},
+                {"role": "system", "content": system_prompt_tools},
                 {"role": "user", "content": user_message},
             ],
             tools=tools,
             format="json",
         )
 
-        print(f"Chat Completion response: {response}")
+        print(f"Function search response: {response}")
 
         content = json.loads(response["message"]["content"])
-        # print(f"Content: {content}")
 
-        if content:
+        if not content:
+            return "No handler defined for this tool call."
+
+        # LLMs give different responses by tool search
+        if "function" in content:
             name = content["function"]
             parameters = content["parameters"]
-
-            print(f"Function: {name}")
-            print(f"Parameters: {parameters}")
-
-            db_result = handlers[name](**parameters)
-
         else:
-            db_result = "No handler defined for this tool call."
+            for key, value in content.items():
+                if (
+                        isinstance(value, dict)
+                        and "function" in value
+                        and "parameters" in value
+                ):
+                    name = value["function"]
+                    parameters = value["parameters"]
+                    break
 
-        print(f"DB result: {db_result}")
+        print(f"Function: {name}")
+        print(f"Parameters: {parameters}")
 
-        # Construct a prompt that includes both the user's request and the database query result.
-        prompt = (
-            f"QUERY: {user_message}\n"
-            f"CONTEXT: {db_result}\n\n"
-            f"{self.valves.PROMPT}"
-        )
-        # print(f"System message: {system_message}")
-        # print(f"Prompt: {prompt}")
+        result = handlers[name](**parameters)
+        print(f"Function call result: {result}")
 
-        del body["messages"]
-
-        # Retrieve the model id from the provided model string.
-        # Update the payload for the API call.
-        payload = {
-            **body,
-            "model": self.valves.MODEL_ID,
-            "prompt": prompt,
-            "system": system_message,
-            "format": "",
-            "options": {
-                "num_ctx": 8196,
-                "top_k": 5,
-                "top_p": 0.5,
-                "max_tokens": 2048,
-                "temperature": 0.7,
+        messages = [
+            {
+                "role": "system",
+                "content": f"{system_message}\n\n{result['prompt']}\n\nContext: {result['data']}",
             },
-        }
-        # print(f"payload: {payload}")
+            {"role": "user", "content": user_message},
+        ]
 
-        headers = {
-            "Content-Type": "application/json",
-        }
         try:
-            with requests.post(
-                    url=f"{self.valves.API_BASE_URL}/generate",
-                    json=payload,
-                    headers=headers,
-                    stream=body.get("stream", False),
-                    timeout=30,
-            ) as r:
-                r.raise_for_status()
-                for raw_line in r.iter_lines(decode_unicode=True):
-                    if not raw_line:
-                        continue
-
-                    d = json.loads(raw_line)
-                    response = d.get("response", "")
-                    print(f"Response: {d.get('response', '')}")
-                    yield response
-
-                    if d["done"]:
-                        break
+            for chunk in self.ollama.chat(
+                model=self.valves.MODEL_ID,
+                messages=messages,
+                stream=True,
+                format="",
+                options={
+                    "num_ctx": body.get("num_ctx", 8196),
+                    "top_k": body.get("top_k", 5),
+                    "top_p": body.get("top_p", 0.9),
+                    "max_tokens": body.get("max_tokens", 2048),
+                    "temperature": body.get("temperature", 0.2),
+                },
+            ):
+                response = chunk["message"]["content"]
+                # print(f"Response: {response}")
+                yield response
 
         except Exception as e:
-            return f"Error: {e}"
+            yield f"Error: {e}"

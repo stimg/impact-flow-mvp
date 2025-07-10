@@ -1651,7 +1651,6 @@ def process_product(
 
     # Create common metadata for all product sections
     metadata = {
-        "id": form_data.metadata["id"],
         "name": form_data.metadata["name"],
         "reference_link": form_data.metadata["reference_link"],
         "source": form_data.metadata["source"],

@@ -12,6 +12,7 @@
 	import Switch from "$lib/components/common/Switch.svelte";
 
 	type Product = {
+		id: string;
 		name: string;
 		short_description: string;
 		target_audience?: string;
@@ -31,8 +32,9 @@
 
 	const i18n = getContext('i18n');
 
+	export let disabled = true;
 	export let saveHandler: Function;
-	export let generateEmbeddingsHandler: (token: string, id: string, content: string, metadata: object, overwrite: boolean) => void;
+	export let generateEmbeddingsHandler: (token: string, id: string, metadata: object, overwrite: boolean) => void;
 	export let overwrite = true;
 	export let id = '';
 	export let name = '';
@@ -51,6 +53,7 @@
 	export let reference_link = '';
 
 	const getMetadata = (): Product => ({
+		id: `${$i18n.t('Product ID')}: ${id}`,
 		name: `${$i18n.t('Product Name')}: ${name}`,
 		short_description: `${$i18n.t('Short description')}: ${short_description}`,
 		product_details: `${$i18n.t('Product details')}: ${product_details}`,
@@ -77,6 +80,12 @@
 	onMount(async () => {
 		// permissions = await getUserPermissions(localStorage.token);
 	});
+
+	const onSubmit = async (evt) => {
+		disabled = true;
+		generateEmbeddingsHandler(localStorage.token, id, getMetadata(), overwrite);
+		evt.target.reset();
+	}
 </script>
 
 <form
@@ -254,15 +263,13 @@
 		{$i18n.t('Neues Produkt anlegen')}
 	</div>
 	<form class="flex flex-col justify-between space-y-3 text-sm"
-		  on:submit|preventDefault={async () => generateEmbeddingsHandler(localStorage.token, id, getMetadata(), overwrite)}>
+		  on:submit|preventDefault={onSubmit}>
 
-<!--
-		<label class="mb-0" for="db_product_id">{$i18n.t('Product ID')}</label>
-		<input type="text" bind:value="{id}" placeholder="{$i18n.t('Wird ein neues Produkt angelegt, wenn leer')}">
--->
+<!--		<label class="mb-0" for="db_product_id">{$i18n.t('Product ID')}</label>-->
+		<input type="hidden" bind:value="{id}" placeholder="{$i18n.t('Wird ein neues Produkt angelegt, wenn leer')}">
 
 		<label class="mb-0" for="db_product_name">{$i18n.t('Product name')}</label>
-		<input type="text" bind:value="{name}">
+		<input type="text" bind:value="{name}" on:change={() => (disabled = false)}>
 
 		<label class="mb-0" for="short_description">{$i18n.t('Short description')}</label>
 		<Textarea bind:value="{short_description}" />
@@ -300,15 +307,15 @@
 		<label class="mb-0" for="reference_link">{$i18n.t('Product webpage')}</label>
 		<input type="text" bind:value="{reference_link}" placeholder="ℹ️ {$i18n.t('Direkter Link zum Produkt im Shop oder Webseite')}">
 
-		<div class="mb-2.5 mt-3 flex justify-center">
-			<div class="text-sm font-medium mr-5">
-				{$i18n.t('Overwrite existing')}
-			</div>
-			<Switch bind:state={overwrite} />
-		</div>
- 		<div class="text-center">
+<!--		<div class="mb-2.5 mt-3 flex justify-center">-->
+<!--			<div class="text-sm font-medium mr-5">-->
+<!--				{$i18n.t('Overwrite existing')}-->
+<!--			</div>-->
+<!--			<Switch bind:state={overwrite} />-->
+<!--		</div>-->
+ 		<div class="text-center mb-10">
 			<input type="reset" value="{$i18n.t('Zurücksetzen')}" class="button w-fit mt-5 mr-3">
-			<input type="submit" value="{$i18n.t('Generate')}" class="button w-fit mt-5">
+			<input type="submit" value="{$i18n.t('Save')}" class="button w-fit mt-5" disabled={disabled}>
 		</div>
 	</form>
 </div>
