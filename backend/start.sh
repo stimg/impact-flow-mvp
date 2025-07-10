@@ -49,7 +49,7 @@ if [[ "${USE_OLLAMA_DOCKER,,}" == "true" ]]; then
 
     # Pull LLM
     echo "Pulling LLM..."
-    ollama pull qwen3:8b
+    ollama pull gemma:2b
 fi
 
 if [[ "${USE_CUDA_DOCKER,,}" == "true" ]]; then

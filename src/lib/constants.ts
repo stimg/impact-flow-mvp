@@ -3,9 +3,9 @@ import { browser, dev } from '$app/environment';
 
 export const APP_NAME = 'Impact Flow';
 
-const WEBUI_BACKEND_URL = 'http://localhost:8080';
 const WEBUI_HOSTNAME = browser ? (dev ? `${location.hostname}:8080` : ``) : ``;
-export const WEBUI_BASE_URL = browser ? (dev ? `http://${WEBUI_HOSTNAME}` : `${WEBUI_BACKEND_URL}`) : ``;
+export const WEBUI_BASE_URL = browser ? (dev ? `http://${WEBUI_HOSTNAME}` : ``) : ``;
+// For external backend
 // export const WEBUI_BASE_URL = 'http://whole-wanids-stimg-9e0cce49.koyeb.app';
 export const WEBUI_API_BASE_URL = `${WEBUI_BASE_URL}/api/v1`;
 
