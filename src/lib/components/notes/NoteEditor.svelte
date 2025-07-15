@@ -932,7 +932,7 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 			>
 				<Tooltip content={$i18n.t('Record')} placement="top">
 					<button
-						class="cursor-pointer p-2.5 flex rounded-full border border-gray-50 bg-white dark:border-none dark:bg-gray-850 hover:bg-gray-50 dark:hover:bg-gray-800 transition shadow-xl"
+						class="svg-button !p-1.5"
 						type="button"
 					>
 						<MicSolid className="size-4.5" />
@@ -941,7 +941,7 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 			</RecordMenu>
 
 			<div
-				class="cursor-pointer flex gap-0.5 rounded-full border border-gray-50 dark:border-gray-850 dark:bg-gray-850 transition shadow-xl"
+				class="svg-button gap-0.5"
 			>
 				<!-- <Tooltip content={$i18n.t('My Notes')} placement="top">
 					<button

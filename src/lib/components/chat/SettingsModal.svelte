@@ -615,7 +615,7 @@
 								</div>
 								<div class=" self-center">{$i18n.t('General')}</div>
 							</button>
-						{:else if tabId === 'interface'}
+						{:else if tabId === 'interface' && $user?.role === 'admin'}
 							<button
 								role="tab"
 								aria-controls="tab-interface"
@@ -651,7 +651,7 @@
 								</div>
 								<div class=" self-center">{$i18n.t('Interface')}</div>
 							</button>
-						{:else if tabId === 'connections'}
+						{:else if tabId === 'connections' && $user?.role === 'admin'}
 							{#if $user?.role === 'admin' || ($user?.role === 'user' && $config?.features?.enable_direct_connections)}
 								<button
 									role="tab"
@@ -687,7 +687,7 @@
 									<div class=" self-center">{$i18n.t('Connections')}</div>
 								</button>
 							{/if}
-						{:else if tabId === 'tools'}
+						{:else if tabId === 'tools' && $user?.role === 'admin'}
 							{#if $user?.role === 'admin' || ($user?.role === 'user' && $user?.permissions?.features?.direct_tool_servers && $config?.features?.direct_tool_servers)}
 								<button
 									role="tab"
@@ -725,7 +725,7 @@
 									<div class=" self-center">{$i18n.t('Tools')}</div>
 								</button>
 							{/if}
-						{:else if tabId === 'personalization'}
+						{:else if tabId === 'personalization' && $user?.role === 'admin'}
 							<button
 								role="tab"
 								aria-controls="tab-personalization"
@@ -749,7 +749,7 @@
 								</div>
 								<div class=" self-center">{$i18n.t('Personalization')}</div>
 							</button>
-						{:else if tabId === 'audio'}
+						{:else if tabId === 'audio' && $user?.role === 'admin'}
 							<button
 								role="tab"
 								aria-controls="tab-audio"
@@ -858,7 +858,7 @@
 								</div>
 								<div class=" self-center">{$i18n.t('Account')}</div>
 							</button>
-						{:else if tabId === 'about'}
+						{:else if tabId === 'about' && $user?.role === 'admin'}
 							<button
 								role="tab"
 								aria-controls="tab-about"
