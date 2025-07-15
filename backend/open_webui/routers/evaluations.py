@@ -1,6 +1,7 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel
+from fastapi.background import BackgroundTasks
 
 from open_webui.models.users import Users, UserModel
 from open_webui.models.feedbacks import (
@@ -12,6 +13,7 @@ from open_webui.models.feedbacks import (
 
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.utils.auth import get_admin_user, get_verified_user
+from open_webui.utils.email import send_feedback_email
 
 router = APIRouter()
 
@@ -115,7 +117,9 @@ async def delete_feedbacks(user=Depends(get_verified_user)):
 async def create_feedback(
     request: Request,
     form_data: FeedbackForm,
+    background_tasks: BackgroundTasks,
     user=Depends(get_verified_user),
+
 ):
     feedback = Feedbacks.insert_new_feedback(user_id=user.id, form_data=form_data)
     if not feedback:
@@ -123,6 +127,9 @@ async def create_feedback(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ERROR_MESSAGES.DEFAULT(),
         )
+
+    # Add email sending to background tasks
+    background_tasks.add_task(send_feedback_email, feedback, user)
 
     return feedback
 
@@ -141,7 +148,9 @@ async def get_feedback_by_id(id: str, user=Depends(get_verified_user)):
 
 @router.post("/feedback/{id}", response_model=FeedbackModel)
 async def update_feedback_by_id(
-    id: str, form_data: FeedbackForm, user=Depends(get_verified_user)
+    id: str,
+    form_data: FeedbackForm,
+    user=Depends(get_verified_user)
 ):
     feedback = Feedbacks.update_feedback_by_id_and_user_id(
         id=id, user_id=user.id, form_data=form_data

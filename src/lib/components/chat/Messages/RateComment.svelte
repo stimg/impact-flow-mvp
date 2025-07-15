@@ -41,9 +41,9 @@
 	let detailedRating: null | number = null;
 	let selectedModel = null;
 
-	$: if (message?.annotation?.rating === 1) {
+	$: if (detailedRating > 5) {
 		reasons = LIKE_REASONS;
-	} else if (message?.annotation?.rating === -1) {
+	} else {
 		reasons = DISLIKE_REASONS;
 	}
 
@@ -142,14 +142,12 @@
 				<!-- 1-10 scale -->
 				{#each Array.from({ length: 10 }).map((_, i) => i + 1) as rating}
 					<button
-						class="size-6 sm:size-7 text-sm border border-gray-300 dark:border-gray-800 hover:bg-gray-200 dark:hover:bg-gray-600 {detailedRating ===
-						rating
-							? 'bg-gray-200 dark:bg-gray-600'
-							: ''} transition rounded-full disabled:cursor-not-allowed disabled:text-gray-300 dark:disabled:text-gray-800 disabled:bg-white dark:disabled:bg-gray-900"
+						class="size-6 sm:size-7 text-sm border border-gray-300 dark:border-gray-800 hover:bg-gray-200 dark:hover:bg-gray-600
+							{detailedRating === rating ? 'bg-gray-200 dark:bg-gray-600' : ''}
+							transition rounded-full disabled:cursor-not-allowed disabled:text-gray-300 dark:disabled:text-gray-800 disabled:bg-white dark:disabled:bg-gray-900"
 						on:click={() => {
 							detailedRating = rating;
 						}}
-						disabled={message?.annotation?.rating === -1 ? rating > 5 : rating < 6}
 					>
 						{rating}
 					</button>
