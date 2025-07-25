@@ -48,8 +48,8 @@ if [[ "${USE_OLLAMA_DOCKER,,}" == "true" ]]; then
     ollama pull bge-m3
 
     # Pull LLM
-    echo "Pulling LLM..."
-    ollama pull qwen2.5:3b
+    # echo "Pulling LLM..."
+    # ollama pull qwen2.5:3b
 fi
 
 if [[ "${USE_CUDA_DOCKER,,}" == "true" ]]; then

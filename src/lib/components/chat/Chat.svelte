@@ -2153,8 +2153,10 @@
 									}}
 								/>
 
-								<div class="absolute bottom-5 text-sm italic text-gray-500 text-center line-clamp-1 right-0 left-0">
-									 {$i18n.t('LLMs can make mistakes. Verify important information.')}
+								<div class="text-xs italic text-gray-500 text-center line-clamp-2 right-0 left-0">
+									<div class="px-20">
+										{$i18n.t('LLMs can make mistakes. Verify important information.')}
+									</div>
 								</div>
 							</div>
 						{:else}
