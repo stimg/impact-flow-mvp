@@ -45,7 +45,7 @@
 	style="field-sizing: content;"
 	rows="{rows}"
 	{required}
-	on:input={(e) => {
+	on:input={() => {
 		resize();
 	}}
 	on:focus={() => {

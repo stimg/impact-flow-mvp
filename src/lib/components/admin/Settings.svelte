@@ -18,12 +18,11 @@
 	import Documents from './Settings/Documents.svelte';
 	import WebSearch from './Settings/WebSearch.svelte';
 
-	import ChartBar from '../icons/ChartBar.svelte';
 	import DocumentChartBar from '../icons/DocumentChartBar.svelte';
 	import Evaluations from './Settings/Evaluations.svelte';
 	import CodeExecution from './Settings/CodeExecution.svelte';
 	import Tools from './Settings/Tools.svelte';
-	import {processProduct} from '$lib/apis/retrieval/index';
+	import {getProductByName, processProduct} from '$lib/apis/products/index';
 
 	const i18n = getContext('i18n');
 
@@ -506,13 +505,22 @@
 				saveHandler={() => {
 					toast.success($i18n.t('Settings saved successfully!'));
 				}}
-				generateEmbeddingsHandler={async (token, id, metadata, overwrite) => {
-					const res = await processProduct(token, id, '', metadata, overwrite);
+				generateEmbeddingsHandler={async (token, id, metadata) => {
+					const res = await processProduct(token, id, '', metadata);
 					if (res.status) {
 						toast.success($i18n.t(`Successfully generated embeddings for product ${res.product_name}!`));
 					} else {
 						toast.error($i18n.t(`Failed to generate embeddings: ${res?.statusText}`));
 					}
+				}}
+				getProductByNameHandler={async (token, name) => {
+					const product = await getProductByName(token, name);
+					if (product.name) {
+						toast.success($i18n.t(`Found product ${product.name}!`));
+						return product;
+					} else {
+						toast.error($i18n.t('Product not found'));
+                    }
 				}}
 			/>
 		{:else if selectedTab === 'pipelines'}
