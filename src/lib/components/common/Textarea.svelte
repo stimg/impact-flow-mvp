@@ -8,8 +8,9 @@
 	export let required = false;
 	export let className =
 		'rounded-lg px-3.5 py-2 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden';
+	export let maxlength = null;
 
-	let textareaElement
+	let textareaElement: HTMLTextAreaElement;
 
 	// Adjust height on mount and after setting the element.
 	onMount(async () => {
@@ -44,6 +45,7 @@
 	class={className}
 	style="field-sizing: content;"
 	rows="{rows}"
+	maxlength="{maxlength}"
 	{required}
 	on:input={() => {
 		resize();

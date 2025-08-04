@@ -21,13 +21,9 @@ from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.retrieval.vector.factory import VECTOR_DB_CLIENT
 from open_webui.config import RAG_EMBEDDING_CONTENT_PREFIX
-from open_webui.models.users import Users
 from open_webui.retrieval.utils import get_embedding_function
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.models.products import ProductModel, ProcessProductForm
-
-from pydantic import BaseModel
-
 from open_webui.env import ENABLE_FORWARD_USER_INFO_HEADERS
 from open_webui.models.products import Products
 from open_webui.routers.ollama import GenerateEmbedForm, get_api_key
@@ -99,7 +95,7 @@ def process_product(
 
 
 @router.post("/embeddings")
-async def generateEmbedings(
+async def generate_embeddings(
         request: Request,
         form_data: GenerateEmbedForm,
         url_idx: Optional[int] = None,
