@@ -1,37 +1,12 @@
 import re
 from typing import Optional, Dict, Union
+from pydantic import BaseModel, UUID4
 
 from open_webui.config import OLLAMA_BASE_URL
 from open_webui.internal.db import Base, get_db
 from open_webui.models.tags import TagModel, Tag, Tags
 from open_webui.retrieval.utils import generate_ollama_batch_embeddings
-from pgvector.sqlalchemy import Vector
-from pydantic import BaseModel, UUID4
-from sqlalchemy import Column, Text, UUID
-from sqlalchemy.dialects.postgresql import JSONB
-
-
-######################
-# Product DB Schema
-######################
-
-class ProductChunk(Base):
-    __tablename__ = 'product_chunks'
-    chunk_id = Column(UUID, primary_key=True)
-    product_id = Column(UUID)
-    chunk_text = Column(Text)
-    embedding = Column(Vector(1024))
-    vmetadata = Column(JSONB)
-
-
-class QNA(Base):
-    __tablename__ = 'q_and_a'
-    id = Column(UUID, primary_key=True)
-    question_text = Column(Text)
-    answer_text = Column(Text)
-    q_embedding = Column(Vector(1024))
-    a_embedding = Column(Vector(1024))
-    vmetadata = Column(JSONB)
+from open_webui.retrieval.vector.dbs.pgvector import ProductChunk
 
 
 ####################
@@ -62,12 +37,10 @@ class ProductModel(BaseModel):
 
 class ProcessProductForm(BaseModel):
     id: str
-    content: str
     metadata: Optional[Dict[str, Union[str, int, bool]]] = None
-    overwrite: bool = False
 
 
-class ImpactFlowProducts:
+class ProductsClass:
 
     def find_by_name(self, product_name: str) -> Dict[str, str] or None:
         id = self.get_id_by_name(product_name)
@@ -102,4 +75,4 @@ class ImpactFlowProducts:
             ]
 
 
-Products = ImpactFlowProducts()
+Products = ProductsClass()

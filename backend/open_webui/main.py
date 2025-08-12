@@ -86,6 +86,7 @@ from open_webui.routers import (
     users,
     utils,
     products,
+    qna,
 )
 
 from open_webui.routers.retrieval import (
@@ -1166,6 +1167,7 @@ app.include_router(
 )
 app.include_router(utils.router, prefix="/api/v1/utils", tags=["utils"])
 app.include_router(products.router, prefix="/api/v1/products", tags=["products"])
+app.include_router(qna.router, prefix="/api/v1/qna", tags=["qna, faq"])
 
 
 try:

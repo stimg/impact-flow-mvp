@@ -1,12 +1,12 @@
-import { PRODUCTS_API_BASE_URL } from '$lib/constants';
+import { QNA_API_BASE_URL } from '$lib/constants';
 
-export const getProductByName = async (
+export const getQNAByName = async (
 	token: string,
-	name: string,
+	question: string,
 ) => {
 	let error = null;
 
-	const res = await fetch(`${PRODUCTS_API_BASE_URL}/?product_name=${encodeURIComponent(name)}`, {
+	const res = await fetch(`${QNA_API_BASE_URL}/?question=${encodeURIComponent(question)}`, {
 		method: 'GET',
 		headers: {
 			Accept: 'application/json',
@@ -31,14 +31,14 @@ export const getProductByName = async (
 	return res;
 };
 
-export const processProduct = async (
+export const processQNA = async (
 	token: string,
 	id: string,
 	metadata = {},
 ) => {
 	let error = null;
 
-	const res = await fetch(`${PRODUCTS_API_BASE_URL}/process`, {
+	const res = await fetch(`${QNA_API_BASE_URL}/process`, {
 		method: 'POST',
 		headers: {
 			Accept: 'application/json',
@@ -67,3 +67,4 @@ export const processProduct = async (
 
 	return res;
 };
+

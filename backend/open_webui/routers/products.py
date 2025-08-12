@@ -23,9 +23,8 @@ from open_webui.retrieval.vector.factory import VECTOR_DB_CLIENT
 from open_webui.config import RAG_EMBEDDING_CONTENT_PREFIX
 from open_webui.retrieval.utils import get_embedding_function
 from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.models.products import ProductModel, ProcessProductForm
+from open_webui.models.products import ProductModel, ProcessProductForm, Products
 from open_webui.env import ENABLE_FORWARD_USER_INFO_HEADERS
-from open_webui.models.products import Products
 from open_webui.routers.ollama import GenerateEmbedForm, get_api_key
 from open_webui.utils.models import get_all_models
 

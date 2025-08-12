@@ -87,6 +87,25 @@ class ProductChunk(Base):
         vmetadata = Column(MutableDict.as_mutable(JSONB), nullable=True)
 
 
+class QNASchema(Base):
+    __tablename__ = "q_and_a"
+
+    id = Column(Uuid, nullable=False, primary_key=True)
+    scope = Column(Text, nullable=False)
+    q_embedding = Column(Vector(dim=1024), nullable=True)
+    a_embedding = Column(Vector(dim=1024), nullable=True)
+    t_embedding = Column(Vector(dim=1024), nullable=True)
+
+    if PGVECTOR_PGCRYPTO:
+        question_text = Column(LargeBinary, nullable=True)
+        answer_text = Column(LargeBinary, nullable=True)
+        tags_text = Column(LargeBinary, nullable=True)
+    else:
+        question_text = Column(Text, nullable=True)
+        answer_text = Column(Text, nullable=True)
+        tags_text = Column(Text, nullable=True)
+
+
 class PgvectorClient(VectorDBBase):
     def __init__(self) -> None:
 
@@ -260,7 +279,7 @@ class PgvectorClient(VectorDBBase):
                                 pgp_sym_encrypt(:chunk_text, :key),
                                 pgp_sym_encrypt(:metadata::text, :key)
                             )
-                            ON CONFLICT (id) DO NOTHING
+                            ON CONFLICT (product_id) DO NOTHING
                         """
                         ),
                         {
@@ -290,6 +309,44 @@ class PgvectorClient(VectorDBBase):
                 self.session.commit()
                 log.info(
                     f"Inserted {len(items)} items into product '{product_id}'."
+                )
+        except Exception as e:
+            self.session.rollback()
+            log.exception(f"Error during insert: {e}")
+            raise
+
+    def insert_qna(self, qna: QNASchema) -> None:
+        try:
+            if PGVECTOR_PGCRYPTO:
+                # Use raw SQL for BYTEA/pgcrypto
+                self.session.execute(
+                    text(
+                        """
+                        INSERT INTO q_and_a
+                        (id, scope, question_text, answer_text, tags_text, q_embedding, a_embedding, t_embedding)
+                        VALUES (
+                            :qna.id, :qna.scope,
+                            pgp_sym_encrypt(:qna.question_text, :key),
+                            pgp_sym_encrypt(:qna.answer_text, :key),
+                            pgp_sym_encrypt(:qna.tags_text, :key),
+                            :qna.q_embedding, :qna.a_embedding, :qna.t_embedding
+                        )
+                        ON CONFLICT (id) DO NOTHING
+                    """
+                    ),
+                    {
+                        **qna,
+                        "key": PGVECTOR_PGCRYPTO_KEY,
+                    },
+                )
+                self.session.commit()
+                log.info(f"Encrypted & inserted data into qna '{id}'")
+
+            else:
+                self.session.bulk_save_objects([qna])
+                self.session.commit()
+                log.info(
+                    f"Inserted data into qna '{id}'."
                 )
         except Exception as e:
             self.session.rollback()
@@ -653,6 +710,30 @@ class PgvectorClient(VectorDBBase):
             log.exception(f"Error during delete: {e}")
             raise
 
+    def delete_qna(
+        self,
+        id: str,
+    ) -> None:
+        try:
+            if PGVECTOR_PGCRYPTO:
+                wheres = [QNASchema.id == id]
+                stmt = QNASchema.__table__.delete().where(*wheres)
+                result = self.session.execute(stmt)
+                deleted = result.rowcount
+            else:
+                query = self.session.query(QNASchema).filter(
+                    QNASchema.id == id
+                )
+                deleted = query.delete(synchronize_session=False)
+
+            self.session.commit()
+            log.info(f"Deleted {deleted} QNA '{id}'.")
+
+        except Exception as e:
+            self.session.rollback()
+            log.exception(f"Error during delete: {e}")
+            raise
+
     def reset(self) -> None:
         try:
             deleted = self.session.query(DocumentChunk).delete()
@@ -686,6 +767,19 @@ class PgvectorClient(VectorDBBase):
             exists = (
                 self.session.query(ProductChunk)
                 .filter(ProductChunk.product_id == product_id)
+                .first()
+                is not None
+            )
+            return exists
+        except Exception as e:
+            log.exception(f"Error checking product existence: {e}")
+            return False
+
+    def has_qna(self, qna_id: str) -> bool:
+        try:
+            exists = (
+                self.session.query(QNASchema)
+                .filter(QNASchema.id == qna_id)
                 .first()
                 is not None
             )
