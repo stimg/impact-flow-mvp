@@ -24,6 +24,7 @@
 	import Tools from './Settings/Tools.svelte';
 	import {getProductByName, processProduct} from '$lib/apis/products/index';
 	import {getQNAByName, processQNA} from '$lib/apis/qna/index';
+    import { processRecommendation, getRecommendationByTag } from '$lib/apis/recommendations';
 
 	const i18n = getContext('i18n');
 
@@ -537,7 +538,24 @@
 						toast.success($i18n.t(`Found question: {{question}}`,  {question: qna.question}));
 						return qna;
 					} else {
-						toast.error($i18n.t('Product not found'));
+						toast.error($i18n.t('Product not found.'));
+                    }
+				}}
+				processRecommendationHandler={async (token, id, metadata) => {
+					const res = await processRecommendation(token, id, metadata);
+					if (res.status) {
+						toast.success(`${$i18n.t('Success')}!`);
+					} else {
+						toast.error($i18n.t(`Failed to save question: {{status}}.`, {status: res?.statusText}));
+					}
+				}}
+				getRecommendationByTagHandler={async (token, tag) => {
+					const rec = await getRecommendationByTag(token, tag);
+					if (rec.tags) {
+						toast.success($i18n.t(`Produktempfehlungen für {{tags}} gefunden.`,  {tag: rec.tags}));
+						return rec;
+					} else {
+						toast.error($i18n.t('Product not found.'));
                     }
 				}}
 			/>

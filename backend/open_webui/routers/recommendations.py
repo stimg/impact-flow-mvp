@@ -22,14 +22,12 @@ from open_webui.retrieval.vector.factory import VECTOR_DB_CLIENT
 from open_webui.config import RAG_EMBEDDING_CONTENT_PREFIX
 from open_webui.retrieval.utils import get_embedding_function
 from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.models.qna import QNAModel, ProcessQNAForm, QNA
+from open_webui.models.recommendations import RecommendationModel, ProcessRecommendationForm, Recommendation
 from open_webui.env import ENABLE_FORWARD_USER_INFO_HEADERS
 from open_webui.routers.ollama import GenerateEmbedForm, get_api_key
 from open_webui.utils.models import get_all_models
-from open_webui.models.qna import ProcessQNAForm
-from open_webui.retrieval.vector.dbs.pgvector import QNASchema
-
-from open_webui.routers.recommendations import string_to_array
+from open_webui.models.recommendations import ProcessRecommendationForm
+from open_webui.retrieval.vector.dbs.pgvector import RecommendationSchema
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MODELS"])
@@ -38,30 +36,39 @@ log.setLevel(SRC_LOG_LEVELS["MODELS"])
 router = APIRouter()
 
 
-@router.get("/", response_model=Optional[QNAModel])
-def find_by_question(question: str, user=Depends(get_verified_user)):
-    print("Question:", question)
-    qna = QNA.find_by_question(question)
+@router.get("/", response_model=Optional[RecommendationModel])
+def find_by_tag(tag: str, user=Depends(get_verified_user)):
+    print("Tag:", tag)
+    rec = Recommendation.find_by_tag(tag)
 
-    print("QNA:", qna)
-    return qna
+    print("Found recommendation:", rec)
+    return rec
 
 
 @router.post("/process")
-def process_qna(
+def recommendation(
         request: Request,
-        form_data: ProcessQNAForm,
+        form_data: ProcessRecommendationForm,
         user=Depends(get_verified_user),
 ):
-    # Generate UUID for the new qna
+    # Generate UUID for the new recommendation if empty
     id = form_data.id or uuid.uuid4()
 
+    # Normalize form data
+    info = form_data.metadata["info"]
+    data = {
+        "tags": cleanup_csv(form_data.metadata["tags"]),
+        "recommended": cleanup_csv(form_data.metadata["recommended"]),
+        "suitable": cleanup_csv(form_data.metadata["suitable"]),
+        "info": info,
+    }
+
     docs = [
-        Document(page_content=form_data.metadata["question"]),
-        Document(page_content=form_data.metadata["answer"]),
+        Document(page_content=normalize_tags(form_data.metadata["tags"])),
+        Document(page_content=info),
     ]
 
-    result = save_qna_to_vector_db(request, id, docs, form_data.metadata, overwrite=True, split=False, user=user)
+    result = save_recommendation_to_vector_db(request, id, docs, data, overwrite=True, split=False, user=user)
     if result:
         return {
             "status": True
@@ -73,7 +80,7 @@ def process_qna(
         )
 
 
-def save_qna_to_vector_db(
+def save_recommendation_to_vector_db(
         request: Request,
         id,
         docs,
@@ -111,24 +118,27 @@ def save_qna_to_vector_db(
     if len(docs) == 0:
         raise ValueError(ERROR_MESSAGES.EMPTY_CONTENT)
 
+    def string_to_array(s: str) -> list:
+        return [item.strip().lower() for item in s.split(",") if item.strip()]
+
     # Extract content for all documents
     texts = [doc.page_content for doc in docs]
 
     try:
-        if VECTOR_DB_CLIENT.has_qna(qna_id=id):
-            log.info(f"qna id {id} already exists")
+        if VECTOR_DB_CLIENT.has_recommendation(rec_id=id):
+            log.info(f"recommendation id {id} already exists")
             print(f"Overwrite {overwrite}")
 
             if overwrite:
-                VECTOR_DB_CLIENT.delete_qna(id=id)
-                log.info(f"deleting existing qna {id}")
+                VECTOR_DB_CLIENT.delete_recommendation(id=id)
+                log.info(f"deleting existing recommendation {id}")
             elif add is False:
                 log.info(
-                    f"qna {id} already exists, overwrite is False and add is False"
+                    f"recommendation {id} already exists, overwrite is False and add is False"
                 )
                 return True
 
-        log.info(f"adding to qna {id}")
+        log.info(f"adding to recommendations {id}")
         embedding_function = get_embedding_function(
             request.app.state.config.RAG_EMBEDDING_ENGINE,
             request.app.state.config.RAG_EMBEDDING_MODEL,
@@ -159,27 +169,49 @@ def save_qna_to_vector_db(
             ),
         )
 
-        # Generate embeddings for question, answer, and tags
+        # Generate embeddings for tag, answer, and tags
         embeddings = embedding_function(
             list(map(lambda x: x.replace("\n", " "), texts)),
             prefix='',
             user=user,
         )
 
-        VECTOR_DB_CLIENT.insert_qna(
-            QNASchema(
+
+        VECTOR_DB_CLIENT.insert_recommendation(
+            RecommendationSchema(
                 id=id,
-                scope=data["scope"],
-                question_text=data["question"],
-                answer_text=data["answer"],
-                q_embedding=embeddings[0],
-                a_embedding=embeddings[1],
+                tags=data["tags"],
+                recommended=data["recommended"],
+                suitable=data["suitable"],
+                info=data["info"],
+                vec_tags=embeddings[0],
+                vec_info=embeddings[1],
             )
         )
-
         return True
 
     except Exception as e:
         log.exception(e)
         raise e
+
+
+def string_to_array(s: str) -> list[str]:
+    seen = set()
+    arr = []
+    for item in s.split(","):
+        tag = item.strip()
+        if tag and tag not in seen:
+            arr.append(tag)
+            seen.add(tag)
+    return arr
+
+
+def normalize_tags(tags: str) -> str:
+    return ", ".join(string_to_array(tags)).lower()
+
+def cleanup_csv(s: str) -> str:
+    return ", ".join(string_to_array(s))
+
+
+
 

@@ -16,6 +16,7 @@ export const IMAGES_API_BASE_URL = `${WEBUI_BASE_URL}/api/v1/images`;
 export const RETRIEVAL_API_BASE_URL = `${WEBUI_BASE_URL}/api/v1/retrieval`;
 export const PRODUCTS_API_BASE_URL = `${WEBUI_BASE_URL}/api/v1/products`;
 export const QNA_API_BASE_URL = `${WEBUI_BASE_URL}/api/v1/qna`;
+export const RECOMMENDATIONS_API_BASE_URL = `${WEBUI_BASE_URL}/api/v1/recommendations`;
 
 export const WEBUI_VERSION = APP_VERSION;
 export const WEBUI_BUILD_HASH = APP_BUILD_HASH;

@@ -18,7 +18,6 @@ class QNAModel(BaseModel):
     scope: str
     question: str
     answer: str
-    tags: str
 
 class ProcessQNAForm(BaseModel):
     id: str
@@ -37,7 +36,6 @@ class QNAClass:
             "scope": qna.scope,
             "question": qna.question_text,
             "answer": qna.answer_text,
-            "tags": qna.tags_text,
         }
 
     def get_id_by_question(self, question: str) -> str:

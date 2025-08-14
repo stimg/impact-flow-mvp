@@ -34,15 +34,23 @@
 
     type QNA = {
         id: string;
-        tags: string;
         scope: string;
         question: string;
         answer: string;
     }
 
+    type Recommendation = {
+        id: string;
+        tags: string;
+        recommended: string;
+        suitable: string;
+        info: string;
+    }
+
     const i18n = getContext('i18n');
     export let disabled = true;
     export let qna_disabled = true;
+    export let recommendations_disabled = true;
 
     export let saveHandler: Function;
 
@@ -51,6 +59,9 @@
 
     export let processQNAHandler: (token: string, id: string, metadata: object) => void;
     export let getQNAByQuestionHandler: (token: string, name: string) => Promise<Product> | undefined;
+
+    export let processRecommendationHandler: (token: string, id: string, metadata: Record<string, unknown>) => void;
+    export let getRecommendationByTagHandler: (token: string, tag: string) => Promise<Recommendation> | undefined;
 
     export let product_id = '';
     export let product_name = '';
@@ -73,10 +84,26 @@
     export let reference_link = '';
 
     export let qna_id = '';
-    export let qna_tags = '';
     export let scope = '';
     export let question = '';
     export let answer = '';
+
+    export let rec_id = '';
+    export let rec_tags = '';
+    export let recommended = '';
+    export let suitable = '';
+    export let info = '';
+
+    const exportAllUserChats = async () => {
+        let blob = new Blob([JSON.stringify(await getAllUserChats(localStorage.token))], {
+            type: 'application/json'
+        });
+        saveAs(blob, `all-chats-export-${Date.now()}.json`);
+    };
+
+    onMount(async () => {
+        // permissions = await getUserPermissions(localStorage.token);
+    });
 
     const setProductSubmitDisabled = () =>
         disabled = !product_name
@@ -91,7 +118,12 @@
         qna_disabled = !scope
             || !question
             || !answer
-            || !qna_tags
+
+    const setRecommendationSubmitDisabled = () =>
+        recommendations_disabled = !recommended
+            || !suitable
+            || !info
+            || !rec_tags
 
     const getProductMetadata = (): Omit<Product, 'id'> => ({
         name: `${$i18n.t('Product Name')}: ${product_name}`,
@@ -114,22 +146,17 @@
         reference_link: reference_link ? `${$i18n.t('Product webpage')}: ${reference_link}` : '',
     })
 
-    const exportAllUserChats = async () => {
-        let blob = new Blob([JSON.stringify(await getAllUserChats(localStorage.token))], {
-            type: 'application/json'
-        });
-        saveAs(blob, `all-chats-export-${Date.now()}.json`);
-    };
-
-    onMount(async () => {
-        // permissions = await getUserPermissions(localStorage.token);
-    });
-
     const getQNAMetadata = () => ({
-        tags: qna_tags,
         scope: scope,
         question: question,
         answer: answer
+    })
+
+    const getRecommendationMetadata = (): Omit<Recommendation, 'id'> => ({
+        tags: rec_tags,
+        recommended,
+        suitable,
+        info
     })
 
     const setProductData = (product: Product) => {
@@ -155,10 +182,17 @@
 
     const setQNAData = (qna: QNA) => {
         qna_id = qna.id;
-        qna_tags = qna.tags;
         scope = qna.scope;
         question = qna.question;
         answer = qna.answer;
+    }
+
+    const setRecommendationData = (recommendation: Recommendation) => {
+        rec_id = recommendation.id;
+        rec_tags = recommendation.tags;
+        recommended = recommendation.recommended;
+        suitable = recommendation.suitable;
+        info = recommendation.info;
     }
 
     const resetProductData = (evt: SubmitEvent) => {
@@ -190,7 +224,6 @@
 
     const resetQNAData = (evt: SubmitEvent) => {
         qna_id = '';
-        qna_tags = '';
         scope = '';
         question = '';
         answer = '';
@@ -199,6 +232,19 @@
         el.style.height = '';
 
         setQNASubmitDisabled();
+    }
+
+    const resetRecommendationData = (evt: SubmitEvent) => {
+        rec_id = '';
+        rec_tags = '';
+        recommended = '';
+        suitable = '';
+        info = '';
+
+        const el: HTMLElement = (evt.target as HTMLElement).querySelector('textarea') as HTMLElement;
+        el.style.height = '';
+
+        setRecommendationSubmitDisabled();
     }
 
     const onProductSubmit = async (evt: SubmitEvent) => {
@@ -221,6 +267,16 @@
         resetQNAData(evt);
     }
 
+    const onRecommendationSubmit = async (evt: SubmitEvent) => {
+        if (recommendations_disabled) {
+            toast.error($i18n.t('Please fill in all mandatory fields'));
+            return;
+        }
+        recommendations_disabled = true;
+        await processRecommendationHandler(localStorage.token, rec_id, getRecommendationMetadata());
+        resetRecommendationData(evt);
+    }
+
     const onProductSearch = async () => {
         const product = await getProductByNameHandler(localStorage.token, search_name);
         if (product) {
@@ -237,6 +293,14 @@
         }
     }
 
+    const onRecommendationSearch = async () => {
+        const recommendation = await getRecommendationByTagHandler(localStorage.token, search_tag);
+        if (recommendation) {
+            setRecommendationData(recommendation);
+            setRecommendationSubmitDisabled();
+        }
+    }
+
     const onResetProductForm = (evt: SubmitEvent) => {
         resetProductData(evt);
     }
@@ -245,8 +309,13 @@
         resetQNAData(evt);
     }
 
+    const onResetRecommendationForm = (evt: SubmitEvent) => {
+        resetRecommendationData(evt);
+    }
+
     let search_name = '';
     let search_question = ''
+    let search_tag = ''
     // Tab state
     let activeTab = 'products';
 
@@ -290,6 +359,22 @@
                 </svg>
             </div>
             {$i18n.t('FAQ')}
+        </button>
+        <button
+                class="tab-button {activeTab === 'recommendations' ? 'active' : ''}"
+                on:click={() => switchTab('recommendations')}
+        >
+            <div class="self-center mr-2">
+                <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        class="w-4 h-4"
+                >
+                    <path d="M16,2h-.171c-.413-1.164-1.525-2-2.829-2h-2c-1.304,0-2.416,.836-2.829,2h-.171c-2.757,0-5,2.243-5,5v12c0,2.757,2.243,5,5,5h8c2.757,0,5-2.243,5-5V7c0-2.757-2.243-5-5-5ZM7,18c-.552,0-1-.448-1-1s.448-1,1-1,1,.448,1,1-.448,1-1,1Zm10,0h-6c-.552,0-1-.448-1-1s.448-1,1-1h6c.552,0,1,.448,1,1s-.448,1-1,1ZM7,14c-.552,0-1-.448-1-1s.448-1,1-1,1,.448,1,1-.448,1-1,1Zm10,0h-6c-.552,0-1-.448-1-1s.448-1,1-1h6c.552,0,1,.448,1,1s-.448,1-1,1ZM7,10c-.552,0-1-.448-1-1s.448-1,1-1,1,.448,1,1-.448,1-1,1Zm10,0h-6c-.552,0-1-.448-1-1s.448-1,1-1h6c.552,0,1,.448,1,1s-.448,1-1,1Z"/>
+                </svg>
+            </div>
+            {$i18n.t('Recommendations')}
         </button>
         <button
                 class="tab-button {activeTab === 'export' ? 'active' : ''}"
@@ -418,7 +503,7 @@
                         <input type="hidden" bind:value="{qna_id}">
 
                         <div class=" mb-5 text-right">
-                            <select class="dark:bg-gray-900 bg-gray-50 w-fit pr-8 rounded-sm px-2 p-1 text-sm outline-hidden text-left text-teal-500" bind:value="{scope}" on:change={setQNASubmitDisabled}>
+                            <select class="dark:bg-gray-900 bg-gray-50 w-fit pr-8 rounded-sm px-2 p-1 text-sm outline-hidden text-teal-500" bind:value="{scope}" on:change={setQNASubmitDisabled}>
                                 <option value="">{$i18n.t('Select scope')}</option>
 <!--                                <option value="recommendations">{$i18n.t('Recommendations')}</option>-->
                                 <option value="qna">{$i18n.t('FAQ')}</option>
@@ -426,9 +511,6 @@
 <!--                                <option value="disclaimer">{$i18n.t('Disclaimer')}</option>-->
                             </select>
                         </div>
-
-                        <label class="mb-0 font-bold text-teal-500" for="qna_tags">{$i18n.t('Tags')}</label>
-                        <input type="text" bind:value="{qna_tags}" on:keydown={setQNASubmitDisabled}>
 
                         <label class="mb-0 font-bold text-teal-500" for="question">{$i18n.t('Question')}</label>
                         <input type="text" bind:value="{question}" on:keydown={setQNASubmitDisabled}>
@@ -439,6 +521,51 @@
                         <div class="text-center mb-10">
                             <input type="reset" value="{$i18n.t('Reset')}" class="button-danger w-fit mt-5 mr-3">
                             <input type="submit" value="{$i18n.t('Save')}" class="button w-fit mt-5" disabled={qna_disabled}>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        {/if}
+
+        {#if activeTab === 'recommendations'}
+            <div class="tab-pane" id="recommendations-tab">
+                <div class="recommendations-container">
+                    <div class="text-lg font-semibold mb-4">
+                        {$i18n.t('Create or edit product recommendation')}
+                    </div>
+                    <div class="mt-2 mb-3">⚠️ {$i18n.t('To prevent duplicates search for existing tags before creating a new recommendation.')}</div>
+                    <div class="border border-gray-100 dark:border-gray-800 rounded-md p-3">
+                        <form class="flex justify-between space-y-3 text-sm"
+                              on:submit|preventDefault={onRecommendationSearch}>
+                            <span class="flex-1">
+                                <input class="w-full" type="text" bind:value="{search_tag}" placeholder="🔎 {$i18n.t('Find existing tag')}">
+                                <div class="text-xs text-gray-500 mt-2">{$i18n.t('Search for tag to find and edit an existing recommendation.')}</div>
+                            </span>
+                            <span class="flex-none">
+                                <input type="submit" class="button w-fit mb-3 ml-5" value="{$i18n.t('Search')}" disabled={!recommendations_disabled}>
+                            </span>
+                        </form>
+                    </div>
+                    <form class="flex flex-col justify-between space-y-3 text-sm mt-10"
+                          on:submit|preventDefault={onRecommendationSubmit}
+                          on:reset|preventDefault={onResetRecommendationForm}>
+                        <input type="hidden" bind:value="{rec_id}">
+
+                        <label class="mb-0 font-bold text-teal-500" for="rec_tags">{$i18n.t('Tags')}</label>
+                        <input type="text" bind:value="{rec_tags}" on:keydown={setRecommendationSubmitDisabled} placeholder="Allergien">
+
+                        <label class="mb-0 font-bold text-teal-500" for="recommended">{$i18n.t('Recommended products')}</label>
+                        <input type="text" bind:value="{recommended}" on:keydown={setRecommendationSubmitDisabled} placeholder="OPC-Kraft, Darmkraft, Inflam-Komplex, Omega 3 plus">
+
+                        <label class="mb-0 font-bold text-teal-500" for="suitable">{$i18n.t('Suitable products')}</label>
+                        <input type="text" bind:value="{suitable}" on:keydown={setRecommendationSubmitDisabled} placeholder="Wurzel-Komplex, Pilzkraft, Eiweiß-Vitalkomplex, Algenkraft, Enzymkraft, Leberkraft, Ayurveda Balance, Gehirnkraft, Lungenkraft">
+
+                        <label class="mb-0 font-bold text-teal-500" for="suitable">{$i18n.t('Indications for use')}</label>
+                        <Textarea bind:value="{info}" onKeydown={setRecommendationSubmitDisabled} onInput={setRecommendationSubmitDisabled} placeholder="OPC-Kraft, Darmkraft, Inflam-Komplex und Omega-3 Plus unterstützen dich dabei, Entzündungen..."/>
+
+                        <div class="text-center mb-10">
+                            <input type="reset" value="{$i18n.t('Reset')}" class="button-danger w-fit mt-5 mr-3">
+                            <input type="submit" value="{$i18n.t('Save')}" class="button w-fit mt-5" disabled={recommendations_disabled}>
                         </div>
                     </form>
                 </div>

@@ -16,7 +16,7 @@ from sqlalchemy import (
     text,
     Text,
     Table,
-    values,
+    values, ARRAY, TIMESTAMP,
 )
 from sqlalchemy.sql import true
 from sqlalchemy.pool import NullPool
@@ -94,16 +94,36 @@ class QNASchema(Base):
     scope = Column(Text, nullable=False)
     q_embedding = Column(Vector(dim=1024), nullable=True)
     a_embedding = Column(Vector(dim=1024), nullable=True)
-    t_embedding = Column(Vector(dim=1024), nullable=True)
 
     if PGVECTOR_PGCRYPTO:
         question_text = Column(LargeBinary, nullable=True)
         answer_text = Column(LargeBinary, nullable=True)
-        tags_text = Column(LargeBinary, nullable=True)
     else:
         question_text = Column(Text, nullable=True)
         answer_text = Column(Text, nullable=True)
-        tags_text = Column(Text, nullable=True)
+
+
+class RecommendationSchema(Base):
+    __tablename__ = "product_recommendations"
+
+    id = Column(Uuid, nullable=False, primary_key=True)
+
+    tags = Column(Text, nullable=False)
+    recommended = Column(Text, nullable=False)
+    suitable = Column(Text, nullable=False)
+
+    tags_arr = Column(ARRAY(Text))
+    info_tsv = Column(Text)
+    vec_tags = Column(Vector(dim=1024))
+    vec_info = Column(Vector(dim=1024))
+
+    created_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
+
+    if PGVECTOR_PGCRYPTO:
+        info = Column(LargeBinary, nullable=True)
+    else:
+        info = Column(Text, nullable=True)
 
 
 class PgvectorClient(VectorDBBase):
@@ -323,13 +343,12 @@ class PgvectorClient(VectorDBBase):
                     text(
                         """
                         INSERT INTO q_and_a
-                        (id, scope, question_text, answer_text, tags_text, q_embedding, a_embedding, t_embedding)
+                        (id, scope, question_text, answer_text, q_embedding, a_embedding)
                         VALUES (
                             :qna.id, :qna.scope,
                             pgp_sym_encrypt(:qna.question_text, :key),
                             pgp_sym_encrypt(:qna.answer_text, :key),
-                            pgp_sym_encrypt(:qna.tags_text, :key),
-                            :qna.q_embedding, :qna.a_embedding, :qna.t_embedding
+                            :qna.q_embedding, :qna.a_embedding
                         )
                         ON CONFLICT (id) DO NOTHING
                     """
@@ -347,6 +366,42 @@ class PgvectorClient(VectorDBBase):
                 self.session.commit()
                 log.info(
                     f"Inserted data into qna '{id}'."
+                )
+        except Exception as e:
+            self.session.rollback()
+            log.exception(f"Error during insert: {e}")
+            raise
+
+    def insert_recommendation(self, recommendation: RecommendationSchema) -> None:
+        try:
+            if PGVECTOR_PGCRYPTO:
+                # Use raw SQL for BYTEA/pgcrypto
+                self.session.execute(
+                    text(
+                        """
+                        INSERT INTO product_recommendations
+                        (id, tags, recommended, suitable, info, vec_tags, vec_info)
+                        VALUES (
+                            :recommendation.id, :recommendation.tags, 
+                            :recommendation.recommended, :recommendation.suitable,
+                            :recommendation.vec_tags, :recommendation.vec_info
+                        )
+                        ON CONFLICT (id) DO NOTHING
+                    """
+                    ),
+                    {
+                        **recommendation,
+                        "key": PGVECTOR_PGCRYPTO_KEY,
+                    },
+                )
+                self.session.commit()
+                log.info(f"Encrypted & inserted data into recommendation '{id}'")
+
+            else:
+                self.session.bulk_save_objects([recommendation])
+                self.session.commit()
+                log.info(
+                    f"Inserted data into recommendation '{id}'."
                 )
         except Exception as e:
             self.session.rollback()
@@ -734,6 +789,30 @@ class PgvectorClient(VectorDBBase):
             log.exception(f"Error during delete: {e}")
             raise
 
+    def delete_recommendation(
+        self,
+        id: str,
+    ) -> None:
+        try:
+            if PGVECTOR_PGCRYPTO:
+                wheres = [RecommendationSchema.id == id]
+                stmt = RecommendationSchema.__table__.delete().where(*wheres)
+                result = self.session.execute(stmt)
+                deleted = result.rowcount
+            else:
+                query = self.session.query(RecommendationSchema).filter(
+                    RecommendationSchema.id == id
+                )
+                deleted = query.delete(synchronize_session=False)
+
+            self.session.commit()
+            log.info(f"Deleted {deleted} Recommendation '{id}'.")
+
+        except Exception as e:
+            self.session.rollback()
+            log.exception(f"Error during delete: {e}")
+            raise
+
     def reset(self) -> None:
         try:
             deleted = self.session.query(DocumentChunk).delete()
@@ -780,6 +859,19 @@ class PgvectorClient(VectorDBBase):
             exists = (
                 self.session.query(QNASchema)
                 .filter(QNASchema.id == qna_id)
+                .first()
+                is not None
+            )
+            return exists
+        except Exception as e:
+            log.exception(f"Error checking product existence: {e}")
+            return False
+
+    def has_recommendation(self, rec_id: str) -> bool:
+        try:
+            exists = (
+                self.session.query(RecommendationSchema)
+                .filter(RecommendationSchema.id == rec_id)
                 .first()
                 is not None
             )
