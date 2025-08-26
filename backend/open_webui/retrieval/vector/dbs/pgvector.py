@@ -78,11 +78,13 @@ class ProductChunk(Base):
     chunk_id = Column(Uuid, nullable=False, primary_key=True)
     product_id = Column(Uuid, nullable=False)
     embedding = Column(Vector(dim=1024), nullable=True)
+    section = Column(Text, nullable=True)
 
     if PGVECTOR_PGCRYPTO:
         chunk_text = Column(LargeBinary, nullable=True)
         vmetadata = Column(LargeBinary, nullable=True)
     else:
+        chunk_text = Column(Text, nullable=True)
         chunk_text = Column(Text, nullable=True)
         vmetadata = Column(MutableDict.as_mutable(JSONB), nullable=True)
 
@@ -98,9 +100,11 @@ class QNASchema(Base):
     if PGVECTOR_PGCRYPTO:
         question_text = Column(LargeBinary, nullable=True)
         answer_text = Column(LargeBinary, nullable=True)
+        hint = Column(LargeBinary, nullable=True)
     else:
         question_text = Column(Text, nullable=True)
         answer_text = Column(Text, nullable=True)
+        hint = Column(Text, nullable=True)
 
 
 class RecommendationSchema(Base):
@@ -122,8 +126,10 @@ class RecommendationSchema(Base):
 
     if PGVECTOR_PGCRYPTO:
         info = Column(LargeBinary, nullable=True)
+        hint = Column(LargeBinary, nullable=True)
     else:
         info = Column(Text, nullable=True)
+        hint = Column(Text, nullable=True)
 
 
 class PgvectorClient(VectorDBBase):
@@ -305,6 +311,7 @@ class PgvectorClient(VectorDBBase):
                         {
                             "chunk_id": item["chunk_id"],
                             "product_id": product_id,
+                            "section": item["section"],
                             "chunk_text": item["chunk_text"],
                             "embedding": item["embedding"],
                             "vmetadata": json.dumps(item["metadata"]),
@@ -320,8 +327,9 @@ class PgvectorClient(VectorDBBase):
                     new_chunk = ProductChunk(
                         chunk_id=item["chunk_id"],
                         product_id=product_id,
-                        embedding=item["embedding"],
+                        section=item["section"],
                         chunk_text=item["chunk_text"],
+                        embedding=item["embedding"],
                         vmetadata=item["metadata"],
                     )
                     new_items.append(new_chunk)
@@ -343,11 +351,12 @@ class PgvectorClient(VectorDBBase):
                     text(
                         """
                         INSERT INTO q_and_a
-                        (id, scope, question_text, answer_text, q_embedding, a_embedding)
+                        (id, scope, question_text answer_text, hint, q_embedding, a_embedding)
                         VALUES (
                             :qna.id, :qna.scope,
                             pgp_sym_encrypt(:qna.question_text, :key),
                             pgp_sym_encrypt(:qna.answer_text, :key),
+                            pgp_sym_encrypt(:qna.hint, :key),
                             :qna.q_embedding, :qna.a_embedding
                         )
                         ON CONFLICT (id) DO NOTHING
@@ -380,10 +389,11 @@ class PgvectorClient(VectorDBBase):
                     text(
                         """
                         INSERT INTO product_recommendations
-                        (id, tags, recommended, suitable, info, vec_tags, vec_info)
+                        (id, tags, recommended, suitable, info, hint, vec_tags, vec_info)
                         VALUES (
                             :recommendation.id, :recommendation.tags, 
                             :recommendation.recommended, :recommendation.suitable,
+                            :recommendation.info, :recommendation.hint,
                             :recommendation.vec_tags, :recommendation.vec_info
                         )
                         ON CONFLICT (id) DO NOTHING

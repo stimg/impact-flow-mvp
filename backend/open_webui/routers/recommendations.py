@@ -22,12 +22,15 @@ from open_webui.retrieval.vector.factory import VECTOR_DB_CLIENT
 from open_webui.config import RAG_EMBEDDING_CONTENT_PREFIX
 from open_webui.retrieval.utils import get_embedding_function
 from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.models.recommendations import RecommendationModel, ProcessRecommendationForm, Recommendation
+from open_webui.models.recommendations import RecommendationModel, ProcessRecommendationForm
 from open_webui.env import ENABLE_FORWARD_USER_INFO_HEADERS
 from open_webui.routers.ollama import GenerateEmbedForm, get_api_key
 from open_webui.utils.models import get_all_models
 from open_webui.models.recommendations import ProcessRecommendationForm
 from open_webui.retrieval.vector.dbs.pgvector import RecommendationSchema
+from open_webui.retrieval.functions.utils import (get_embeddings)
+
+from open_webui.models.recommendations import get_recommendation_by_embedding
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MODELS"])
@@ -37,12 +40,20 @@ router = APIRouter()
 
 
 @router.get("/", response_model=Optional[RecommendationModel])
-def find_by_tag(tag: str, user=Depends(get_verified_user)):
+def find_by_tag(request: Request, tag: str, user=Depends(get_verified_user)):
     print("Tag:", tag)
-    rec = Recommendation.find_by_tag(tag)
+    embedding = get_embeddings(request, [tag], user)
+    rec = get_recommendation_by_embedding(embedding[0]) if len(embedding) > 0 else None
 
-    print("Found recommendation:", rec)
-    return rec
+    if rec and user.role == "admin":
+        print("Found recommendation:", rec)
+        return rec
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=ERROR_MESSAGES.NOT_FOUND,
+    )
+
 
 
 @router.post("/process")
@@ -61,6 +72,7 @@ def recommendation(
         "recommended": cleanup_csv(form_data.metadata["recommended"]),
         "suitable": cleanup_csv(form_data.metadata["suitable"]),
         "info": info,
+        "hint": form_data.metadata["hint"],
     }
 
     docs = [
@@ -118,9 +130,6 @@ def save_recommendation_to_vector_db(
     if len(docs) == 0:
         raise ValueError(ERROR_MESSAGES.EMPTY_CONTENT)
 
-    def string_to_array(s: str) -> list:
-        return [item.strip().lower() for item in s.split(",") if item.strip()]
-
     # Extract content for all documents
     texts = [doc.page_content for doc in docs]
 
@@ -139,43 +148,8 @@ def save_recommendation_to_vector_db(
                 return True
 
         log.info(f"adding to recommendations {id}")
-        embedding_function = get_embedding_function(
-            request.app.state.config.RAG_EMBEDDING_ENGINE,
-            request.app.state.config.RAG_EMBEDDING_MODEL,
-            request.app.state.ef,
-            (
-                request.app.state.config.RAG_OPENAI_API_BASE_URL
-                if request.app.state.config.RAG_EMBEDDING_ENGINE == "openai"
-                else (
-                    request.app.state.config.RAG_OLLAMA_BASE_URL
-                    if request.app.state.config.RAG_EMBEDDING_ENGINE == "ollama"
-                    else request.app.state.config.RAG_AZURE_OPENAI_BASE_URL
-                )
-            ),
-            (
-                request.app.state.config.RAG_OPENAI_API_KEY
-                if request.app.state.config.RAG_EMBEDDING_ENGINE == "openai"
-                else (
-                    request.app.state.config.RAG_OLLAMA_API_KEY
-                    if request.app.state.config.RAG_EMBEDDING_ENGINE == "ollama"
-                    else request.app.state.config.RAG_AZURE_OPENAI_API_KEY
-                )
-            ),
-            request.app.state.config.RAG_EMBEDDING_BATCH_SIZE,
-            azure_api_version=(
-                request.app.state.config.RAG_AZURE_OPENAI_API_VERSION
-                if request.app.state.config.RAG_EMBEDDING_ENGINE == "azure_openai"
-                else None
-            ),
-        )
 
-        # Generate embeddings for tag, answer, and tags
-        embeddings = embedding_function(
-            list(map(lambda x: x.replace("\n", " "), texts)),
-            prefix='',
-            user=user,
-        )
-
+        embeddings = get_embeddings(request, texts, user)
 
         VECTOR_DB_CLIENT.insert_recommendation(
             RecommendationSchema(
@@ -184,6 +158,7 @@ def save_recommendation_to_vector_db(
                 recommended=data["recommended"],
                 suitable=data["suitable"],
                 info=data["info"],
+                hint=data["hint"],
                 vec_tags=embeddings[0],
                 vec_info=embeddings[1],
             )

@@ -27,6 +27,7 @@
         application_area?: string;
         formulation_origin?: string;
         history?: string;
+        hint?: string;
         user_experience?: string;
         document_url?: string;
         source?: string;
@@ -37,6 +38,7 @@
         scope: string;
         question: string;
         answer: string;
+        hint: string;
     }
 
     type Recommendation = {
@@ -45,6 +47,7 @@
         recommended: string;
         suitable: string;
         info: string;
+        hint: string;
     }
 
     const i18n = getContext('i18n');
@@ -55,10 +58,10 @@
     export let saveHandler: Function;
 
     export let processProductHandler: (token: string, id: string, metadata: object) => void;
-    export let getProductByNameHandler: (token: string, name: string) => Promise<QNA> | undefined;
+    export let getProductByNameHandler: (token: string, name: string) => Promise<Product> | undefined;
 
     export let processQNAHandler: (token: string, id: string, metadata: object) => void;
-    export let getQNAByQuestionHandler: (token: string, name: string) => Promise<Product> | undefined;
+    export let getQNAByQuestionHandler: (token: string, name: string) => Promise<QNA> | undefined;
 
     export let processRecommendationHandler: (token: string, id: string, metadata: Record<string, unknown>) => void;
     export let getRecommendationByTagHandler: (token: string, tag: string) => Promise<Recommendation> | undefined;
@@ -79,6 +82,7 @@
     export let ingredients = '';
     export let formulation_origin = '';
     export let history = '';
+    export let prod_hint = '';
     export let user_experience = '';
     export let source = 'https://www.ethno-health.com';
     export let reference_link = '';
@@ -87,12 +91,14 @@
     export let scope = '';
     export let question = '';
     export let answer = '';
+    export let qna_hint = '';
 
     export let rec_id = '';
     export let rec_tags = '';
     export let recommended = '';
     export let suitable = '';
     export let info = '';
+    export let rec_hint = '';
 
     const exportAllUserChats = async () => {
         let blob = new Blob([JSON.stringify(await getAllUserChats(localStorage.token))], {
@@ -126,7 +132,7 @@
             || !rec_tags
 
     const getProductMetadata = (): Omit<Product, 'id'> => ({
-        name: `${$i18n.t('Product Name')}: ${product_name}`,
+        name: product_name,
         categories: `${$i18n.t('Categories')}: ${categories}`,
         tags: tags ? `${$i18n.t('Tags')}: ${tags}` : '',
         similar_products: similar_products ? `${$i18n.t('Similar products')}: ${similar_products}` : '',
@@ -141,22 +147,25 @@
         ingredients: ingredients ? `${$i18n.t('Ingredients')}: ${ingredients}` : '',
         formulation_origin: formulation_origin ? `${$i18n.t('Formulation origin')}: ${formulation_origin}` : '',
         history: history ? `${$i18n.t('History')}: ${history}` : '',
+        hint: prod_hint,
         user_experience: user_experience ? `${$i18n.t('User experience')}: ${user_experience}` : '',
-        source: source ? `${$i18n.t('Manufacturers homepage')}: ${source}` : '',
-        reference_link: reference_link ? `${$i18n.t('Product webpage')}: ${reference_link}` : '',
+        source: source ? source : '',
+        reference_link: reference_link ? reference_link : '',
     })
 
     const getQNAMetadata = () => ({
         scope: scope,
         question: question,
-        answer: answer
+        answer: answer,
+        hint: qna_hint,
     })
 
     const getRecommendationMetadata = (): Omit<Recommendation, 'id'> => ({
         tags: rec_tags,
         recommended,
         suitable,
-        info
+        info,
+        hint: rec_hint,
     })
 
     const setProductData = (product: Product) => {
@@ -176,6 +185,7 @@
         ingredients = product.ingredients;
         formulation_origin = product.formulation_origin || '';
         history = product.history || '';
+        prod_hint = product.hint || '';
         user_experience = product.user_experience || '';
         reference_link = product.reference_link;
     }
@@ -185,6 +195,7 @@
         scope = qna.scope;
         question = qna.question;
         answer = qna.answer;
+        qna_hint = qna.hint;
     }
 
     const setRecommendationData = (recommendation: Recommendation) => {
@@ -193,6 +204,7 @@
         recommended = recommendation.recommended;
         suitable = recommendation.suitable;
         info = recommendation.info;
+        rec_hint = recommendation.hint;
     }
 
     const resetProductData = (evt: SubmitEvent) => {
@@ -212,6 +224,7 @@
         ingredients = '';
         formulation_origin = '';
         history = '';
+        prod_hint = '';
         user_experience = '';
         reference_link = '';
 
@@ -227,6 +240,7 @@
         scope = '';
         question = '';
         answer = '';
+        qna_hint = '';
 
         const el: HTMLElement = (evt.target as HTMLElement).querySelector('textarea') as HTMLElement;
         el.style.height = '';
@@ -240,6 +254,7 @@
         recommended = '';
         suitable = '';
         info = '';
+        rec_hint = '';
 
         const el: HTMLElement = (evt.target as HTMLElement).querySelector('textarea') as HTMLElement;
         el.style.height = '';
@@ -406,7 +421,7 @@
                         <form class="flex justify-between space-y-3 text-sm"
                               on:submit|preventDefault={onProductSearch}>
                             <span class="flex-1">
-                                <input class="w-full" type="text" bind:value="{search_name}" placeholder="🔎 {$i18n.t('Search product by name')}">
+                                <input class="w-full disabled:text-gray-500" type="text" bind:value="{search_name}" placeholder="🔎 {$i18n.t('Search product by name')}" disabled={!disabled}>
                                 <div class="text-xs text-gray-500">{$i18n.t('To update a product, first find it by name to populate its fields.')}</div>
                             </span>
                             <span class="flex-none">
@@ -419,13 +434,13 @@
                         <input type="hidden" bind:value="{product_id}" placeholder="{$i18n.t('Wird ein neues Produkt angelegt, wenn leer')}">
 
                         <label class="mb-0 font-bold text-teal-500" for="name">{$i18n.t('Product name')}</label>
-                        <input type="text" bind:value="{product_name}" on:keydown={setProductSubmitDisabled}>
+                        <input type="text" bind:value="{product_name}" on:input={setProductSubmitDisabled} on:keydown={setProductSubmitDisabled}>
 
                         <label class="mb-0 font-bold text-teal-500" for="categories">{$i18n.t('Categories')}</label>
-                        <input type="text" bind:value="{categories}" placeholder="ℹ️ {$i18n.t('Zum Beispiel: Tibetische Rezeptur Lung')}" on:keydown={setProductSubmitDisabled}>
+                        <input type="text" bind:value="{categories}" placeholder="ℹ️ {$i18n.t('Zum Beispiel: Tibetische Rezeptur Lung')}" on:input={setProductSubmitDisabled} on:keydown={setProductSubmitDisabled}>
 
                         <label class="mb-0 font-bold text-teal-500" for="tags">{$i18n.t('Tags')}</label>
-                        <input type="text" bind:value="{tags}" placeholder="ℹ️ {$i18n.t('Zum Beispiel: Shake, Shape Classic, Abnehmen, Wohlfühlen , Konzept')}" on:keydown={setProductSubmitDisabled}>
+                        <input type="text" bind:value="{tags}" placeholder="ℹ️ {$i18n.t('Zum Beispiel: Shake, Shape Classic, Abnehmen, Wohlfühlen , Konzept')}" on:input={setProductSubmitDisabled} on:keydown={setProductSubmitDisabled}>
 
                         <label class="mb-0" for="recommended_products">{$i18n.t('Recommended products')}</label>
                         <input type="text" bind:value="{recommended_products}" placeholder="ℹ️ {$i18n.t('Zum Beispiel: Omega Go!, Omega 3 Orange')}">
@@ -440,7 +455,7 @@
                         <input type="text" bind:value="{combinable_with}" placeholder="ℹ️ {$i18n.t('Zum Beispiel: Lung, Omega Go!, Omega 3 Orange')}">
 
                         <label class="mb-0 font-bold text-teal-500" for="short_description">{$i18n.t('Short description')}</label>
-                        <Textarea bind:value="{short_description}" onKeydown={setProductSubmitDisabled}/>
+                        <Textarea bind:value="{short_description}" on:input={setProductSubmitDisabled} onKeydown={setProductSubmitDisabled}/>
 
                         <label class="mb-0" for="product_details">{$i18n.t('Product details')}</label>
                         <Textarea bind:value="{product_details}"/>
@@ -455,10 +470,10 @@
                         <Textarea bind:value="{formulation_origin}"/>
 
                         <label class="mb-0 font-bold text-teal-500" for="intake_recommendation">{$i18n.t('Intake recommendation')}</label>
-                        <Textarea bind:value="{intake_recommendation}" onKeydown={setProductSubmitDisabled}/>
+                        <Textarea bind:value="{intake_recommendation}" on:input={setProductSubmitDisabled} onKeydown={setProductSubmitDisabled}/>
 
                         <label class="mb-0 font-bold text-teal-500" for="ingredients">{$i18n.t('Ingredients')}</label>
-                        <Textarea bind:value="{ingredients}" on:keydown={setProductSubmitDisabled}/>
+                        <Textarea bind:value="{ingredients}" on:input={setProductSubmitDisabled} on:keydown={setProductSubmitDisabled}/>
 
                         <label class="mb-0" for="history">{$i18n.t('History')}</label>
                         <Textarea bind:value="{history}"/>
@@ -467,7 +482,10 @@
                         <Textarea bind:value="{user_experience}" placeholder="ℹ️ {$i18n.t('Zum Beispiel: Monika S., 57 Jahre. \"Es ist erstaunlich, wie einfach es sein kann, für die eigene Gesundheit etwas zu tun... \"')}"/>
 
                         <label class="mb-0 font-bold text-teal-500" for="reference_link">{$i18n.t('Product webpage')}</label>
-                        <input type="text" bind:value="{reference_link}" placeholder="ℹ️ {$i18n.t('Direkter Link zum Produkt im Shop oder Webseite')}" on:keydown={setProductSubmitDisabled}>
+                        <input type="text" bind:value="{reference_link}" placeholder="ℹ️ {$i18n.t('Direkter Link zum Produkt im Shop oder Webseite')}"  on:input={setProductSubmitDisabled} on:keydown={setProductSubmitDisabled}>
+
+                        <label class="mb-0" for="prod_hint">{$i18n.t('Mentora Pro hint')} 💡</label>
+                        <Textarea bind:value="{prod_hint}" placeholder="Nimm anstelle Wasser mal Tee mit Zitrone um die Wirkung von Produkt zu verbessern."/>
 
                         <div class="text-center mb-10">
                             <input type="reset" value="{$i18n.t('Zurücksetzen')}" class="button-danger w-fit mt-5 mr-3">
@@ -489,7 +507,7 @@
                         <form class="flex justify-between space-y-3 text-sm"
                               on:submit|preventDefault={onQNASearch}>
                             <span class="flex-1">
-                                <input class="w-full" type="text" bind:value="{search_question}" placeholder="🔎 {$i18n.t('Find similar questions')}">
+                                <input class="w-full disabled:text-gray-500" type="text" bind:value="{search_question}" placeholder="🔎 {$i18n.t('Find similar questions')}" disabled={!qna_disabled}>
                                 <div class="text-xs text-gray-500 mt-2">{$i18n.t('Search to find and edit an existing question or its answer.')}</div>
                             </span>
                             <span class="flex-none">
@@ -518,6 +536,9 @@
                         <label class="mb-0 font-bold text-teal-500" for="answer">{$i18n.t('Answer')}</label>
                         <Textarea bind:value="{answer}" onKeydown={setQNASubmitDisabled} onInput={setQNASubmitDisabled}/>
 
+                        <label class="mb-0" for="qna_hint">{$i18n.t('Mentora Pro hint')} 💡</label>
+                        <Textarea bind:value="{qna_hint}" placeholder="Nimm anstelle Wasser mal Tee mit Zitrone um die Wirkung von Produkt zu verbessern."/>
+
                         <div class="text-center mb-10">
                             <input type="reset" value="{$i18n.t('Reset')}" class="button-danger w-fit mt-5 mr-3">
                             <input type="submit" value="{$i18n.t('Save')}" class="button w-fit mt-5" disabled={qna_disabled}>
@@ -538,7 +559,7 @@
                         <form class="flex justify-between space-y-3 text-sm"
                               on:submit|preventDefault={onRecommendationSearch}>
                             <span class="flex-1">
-                                <input class="w-full" type="text" bind:value="{search_tag}" placeholder="🔎 {$i18n.t('Find existing tag')}">
+                                <input class="w-full disabled:text-gray-500" type="text" bind:value="{search_tag}" placeholder="🔎 {$i18n.t('Find existing tag')}" disabled={!recommendations_disabled}>
                                 <div class="text-xs text-gray-500 mt-2">{$i18n.t('Search for tag to find and edit an existing recommendation.')}</div>
                             </span>
                             <span class="flex-none">
@@ -562,6 +583,9 @@
 
                         <label class="mb-0 font-bold text-teal-500" for="suitable">{$i18n.t('Indications for use')}</label>
                         <Textarea bind:value="{info}" onKeydown={setRecommendationSubmitDisabled} onInput={setRecommendationSubmitDisabled} placeholder="OPC-Kraft, Darmkraft, Inflam-Komplex und Omega-3 Plus unterstützen dich dabei, Entzündungen..."/>
+
+                        <label class="mb-0" for="rec_hint">{$i18n.t('Mentora Pro hint')} 💡</label>
+                        <Textarea bind:value="{rec_hint}" placeholder="Nimm anstelle Wasser mal Tee mit Zitrone um die Wirkung von Produkt zu verbessern."/>
 
                         <div class="text-center mb-10">
                             <input type="reset" value="{$i18n.t('Reset')}" class="button-danger w-fit mt-5 mr-3">

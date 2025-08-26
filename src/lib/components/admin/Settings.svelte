@@ -552,7 +552,7 @@
 				getRecommendationByTagHandler={async (token, tag) => {
 					const rec = await getRecommendationByTag(token, tag);
 					if (rec.tags) {
-						toast.success($i18n.t(`Produktempfehlungen für {{tags}} gefunden.`,  {tag: rec.tags}));
+						toast.success($i18n.t(`Produktempfehlungen für {{tags}} gefunden.`,  {tags: rec.tags}));
 						return rec;
 					} else {
 						toast.error($i18n.t('Product not found.'));

@@ -1,5 +1,5 @@
 import re
-from typing import Optional, Dict, Union
+from typing import Optional, Dict, Union, List
 from pydantic import BaseModel, UUID4
 
 from open_webui.config import OLLAMA_BASE_URL
@@ -18,46 +18,27 @@ class QNAModel(BaseModel):
     scope: str
     question: str
     answer: str
+    hint: str
 
 class ProcessQNAForm(BaseModel):
     id: str
     metadata: Dict[str, Union[str, int, bool]]
 
 
-class QNAClass:
+def get_qna_by_embedding(vec: List[float], col: str):
+    embedding_column = getattr(QNASchema, col)
 
-    def find_by_question(self, question: str) -> Dict[str, str] or None:
-        print(f"Searching for Q&A related to: {question}")
-        id = self.get_id_by_question(question)
-        qna = self.get_qna_by_id(id)
+    with get_db() as db:
+        qna = (db.query(QNASchema)
+          .order_by(embedding_column.l2_distance(vec))
+          .limit(1)
+          .first())
 
-        return {
-            "id": id,
-            "scope": qna.scope,
-            "question": qna.question_text,
-            "answer": qna.answer_text,
-        }
+    return {
+        "id": str(qna.id),
+        "scope": qna.scope,
+        "question": qna.question_text,
+        "answer": qna.answer_text,
+        "hint": qna.hint or '',
+    } if qna else None
 
-    def get_id_by_question(self, question: str) -> str:
-        question_vector = generate_ollama_batch_embeddings("bge-m3", question, OLLAMA_BASE_URL)[0]
-
-        with get_db() as db:
-            uuid_tuple = (db.query(QNASchema.id)
-                          .order_by(QNASchema.q_embedding.l2_distance(question_vector))
-                          .limit(1)
-                          .first())
-
-            return str(uuid_tuple[0])
-
-
-    def get_qna_by_id(self, id: str) -> Optional[QNASchema]:
-        try:
-            with get_db() as db:
-                return db.query(QNASchema).filter_by(id=id).first()
-
-        except Exception as e:
-            print(f"Error fetching QNA: {e}")
-            return None
-
-
-QNA = QNAClass()

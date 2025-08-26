@@ -1,12 +1,13 @@
 import re
-from typing import Optional, Dict, Union
+from typing import Optional, Dict, Union, List
 from pydantic import BaseModel, UUID4
 
 from open_webui.config import OLLAMA_BASE_URL
 from open_webui.internal.db import Base, get_db
 from open_webui.models.tags import TagModel, Tag, Tags
-from open_webui.retrieval.utils import generate_ollama_batch_embeddings
+from open_webui.retrieval.utils import generate_ollama_batch_embeddings, generate_openai_batch_embeddings
 from open_webui.retrieval.vector.dbs.pgvector import ProductChunk
+from open_webui.retrieval.functions.utils import get_id_by_embedding
 
 
 ####################
@@ -40,39 +41,29 @@ class ProcessProductForm(BaseModel):
     metadata: Optional[Dict[str, Union[str, int, bool]]] = None
 
 
+def get_chunks_by_id(product_id: str) -> list[ProductChunk]:
+    with get_db() as db:
+        return [
+            chunk
+            for chunk in db.query(ProductChunk).filter_by(product_id=product_id).all()
+        ]
+
+
 class ProductsClass:
 
-    def find_by_name(self, product_name: str) -> Dict[str, str] or None:
-        id = self.get_id_by_name(product_name)
-        product_chunks = self.get_chunks_by_id(id)
+    def find_by_embedding(self, embedding: List[float], col="name") -> Dict[str, str] or None:
+        id = get_id_by_embedding(embedding, col)
+        print(f"Searching for product with id: {id}")
+        product_chunks = get_chunks_by_id(id)
 
         product = {
-            chunk.vmetadata.get("section"): re.sub(r"^.*:\s", "", chunk.chunk_text)
+            chunk.section: re.sub(r"^.*:\s", "", chunk.chunk_text)
             for chunk in product_chunks
         }
         product["id"] = id
+        print(f"Found product: {product}")
 
         return product
-
-    def get_id_by_name(self, product_name: str) -> str:
-        product_name_vector = generate_ollama_batch_embeddings("bge-m3", product_name, OLLAMA_BASE_URL)[0]
-
-        with get_db() as db:
-            uuid_tuple = (db.query(ProductChunk.product_id)
-                .filter(ProductChunk.vmetadata['section'].astext == 'name')
-                .order_by(ProductChunk.embedding.l2_distance(product_name_vector))
-                .limit(1)
-                .first())
-
-            return str(uuid_tuple[0])
-
-
-    def get_chunks_by_id(self, product_id: str) -> list[ProductChunk]:
-        with get_db() as db:
-            return [
-                chunk
-                for chunk in db.query(ProductChunk).filter_by(product_id=product_id).all()
-            ]
 
 
 Products = ProductsClass()

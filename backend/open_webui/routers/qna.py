@@ -22,7 +22,7 @@ from open_webui.retrieval.vector.factory import VECTOR_DB_CLIENT
 from open_webui.config import RAG_EMBEDDING_CONTENT_PREFIX
 from open_webui.retrieval.utils import get_embedding_function
 from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.models.qna import QNAModel, ProcessQNAForm, QNA
+from open_webui.models.qna import QNAModel, ProcessQNAForm
 from open_webui.env import ENABLE_FORWARD_USER_INFO_HEADERS
 from open_webui.routers.ollama import GenerateEmbedForm, get_api_key
 from open_webui.utils.models import get_all_models
@@ -30,6 +30,9 @@ from open_webui.models.qna import ProcessQNAForm
 from open_webui.retrieval.vector.dbs.pgvector import QNASchema
 
 from open_webui.routers.recommendations import string_to_array
+
+from open_webui.models.qna import get_qna_by_embedding
+from open_webui.retrieval.functions.utils import get_embeddings
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MODELS"])
@@ -39,12 +42,19 @@ router = APIRouter()
 
 
 @router.get("/", response_model=Optional[QNAModel])
-def find_by_question(question: str, user=Depends(get_verified_user)):
+def find_by_question(request: Request, question: str, user=Depends(get_verified_user)):
     print("Question:", question)
-    qna = QNA.find_by_question(question)
+    embedding = get_embeddings(request, [question], user)
+    qna = get_qna_by_embedding(embedding[0], "q_embedding") if len(embedding) > 0 else None
 
-    print("QNA:", qna)
-    return qna
+    if qna and user.role == "admin":
+        print("QNA:", qna)
+        return qna
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=ERROR_MESSAGES.NOT_FOUND,
+    )
 
 
 @router.post("/process")
@@ -56,12 +66,7 @@ def process_qna(
     # Generate UUID for the new qna
     id = form_data.id or uuid.uuid4()
 
-    docs = [
-        Document(page_content=form_data.metadata["question"]),
-        Document(page_content=form_data.metadata["answer"]),
-    ]
-
-    result = save_qna_to_vector_db(request, id, docs, form_data.metadata, overwrite=True, split=False, user=user)
+    result = save_qna_to_vector_db(request, id, form_data.metadata, overwrite=True, split=False, user=user)
     if result:
         return {
             "status": True
@@ -76,7 +81,6 @@ def process_qna(
 def save_qna_to_vector_db(
         request: Request,
         id,
-        docs,
         data: Optional[dict] = None,
         overwrite: bool = False,
         split: bool = True,
@@ -108,12 +112,6 @@ def save_qna_to_vector_db(
 
         docs = text_splitter.split_documents(docs)
 
-    if len(docs) == 0:
-        raise ValueError(ERROR_MESSAGES.EMPTY_CONTENT)
-
-    # Extract content for all documents
-    texts = [doc.page_content for doc in docs]
-
     try:
         if VECTOR_DB_CLIENT.has_qna(qna_id=id):
             log.info(f"qna id {id} already exists")
@@ -129,42 +127,13 @@ def save_qna_to_vector_db(
                 return True
 
         log.info(f"adding to qna {id}")
-        embedding_function = get_embedding_function(
-            request.app.state.config.RAG_EMBEDDING_ENGINE,
-            request.app.state.config.RAG_EMBEDDING_MODEL,
-            request.app.state.ef,
-            (
-                request.app.state.config.RAG_OPENAI_API_BASE_URL
-                if request.app.state.config.RAG_EMBEDDING_ENGINE == "openai"
-                else (
-                    request.app.state.config.RAG_OLLAMA_BASE_URL
-                    if request.app.state.config.RAG_EMBEDDING_ENGINE == "ollama"
-                    else request.app.state.config.RAG_AZURE_OPENAI_BASE_URL
-                )
-            ),
-            (
-                request.app.state.config.RAG_OPENAI_API_KEY
-                if request.app.state.config.RAG_EMBEDDING_ENGINE == "openai"
-                else (
-                    request.app.state.config.RAG_OLLAMA_API_KEY
-                    if request.app.state.config.RAG_EMBEDDING_ENGINE == "ollama"
-                    else request.app.state.config.RAG_AZURE_OPENAI_API_KEY
-                )
-            ),
-            request.app.state.config.RAG_EMBEDDING_BATCH_SIZE,
-            azure_api_version=(
-                request.app.state.config.RAG_AZURE_OPENAI_API_VERSION
-                if request.app.state.config.RAG_EMBEDDING_ENGINE == "azure_openai"
-                else None
-            ),
-        )
 
-        # Generate embeddings for question, answer, and tags
-        embeddings = embedding_function(
-            list(map(lambda x: x.replace("\n", " "), texts)),
-            prefix='',
-            user=user,
-        )
+        texts = [
+            data["question"],
+            data["answer"],
+        ]
+
+        embeddings = get_embeddings(request, texts, user)
 
         VECTOR_DB_CLIENT.insert_qna(
             QNASchema(
@@ -172,6 +141,7 @@ def save_qna_to_vector_db(
                 scope=data["scope"],
                 question_text=data["question"],
                 answer_text=data["answer"],
+                hint=data["hint"],
                 q_embedding=embeddings[0],
                 a_embedding=embeddings[1],
             )

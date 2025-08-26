@@ -5,7 +5,7 @@ services:
     build:
       context: .
       args:
-        USE_OLLAMA: true
+        USE_OLLAMA: false
 #        USE_CUDA: true
 
 #    platform: linux/amd64

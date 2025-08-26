@@ -1713,7 +1713,7 @@
 								tags_generation: $settings?.autoTags ?? true
 							}
 						: {}),
-					follow_up_generation: $settings?.autoFollowUps ?? true
+					follow_up_generation: $settings?.autoFollowUps
 				},
 
 				...(stream && (model.info?.meta?.capabilities?.usage ?? false)
