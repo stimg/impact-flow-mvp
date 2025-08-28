@@ -1,21 +1,17 @@
 from typing import List
-
-import psycopg2
 import re
+import html
+import psycopg2
 import requests
-
 from fastapi import (
     Depends,
     Request,
 )
-
-
-from psycopg2.extras import RealDictCursor
-from sqlalchemy import text
-
+from open_webui.internal.db import get_db
 from open_webui.retrieval.utils import get_embedding_function
 from open_webui.utils.auth import get_verified_user
-from open_webui.internal.db import get_db
+from psycopg2.extras import RealDictCursor
+from sqlalchemy import text
 
 
 def get_user_name_from_full_name(self, username: str | None) -> str:
@@ -37,6 +33,47 @@ def get_embedding(self, text=""):
     )
 
     return response.data[0].embedding
+
+def sanitize_user_input(text: str, strict: bool = True) -> str:
+    clean = text
+    re_html_tags        = re.compile(r"</?[^>]+(?:>|$)")
+    re_md_link_or_image = re.compile(r"!?\[([^\]]*?)\]\([^)]+?\)")
+    re_md_inline_fmt    = re.compile(r"[*_~`>#-]+")
+    re_unescape_bslash  = re.compile(r"\\([\\`*_{[}()\#+\-.!])")
+    re_control_chars    = re.compile(r"[^\x20-\x7E\n\r\t]+")
+    re_space_before_nl  = re.compile(r"\s+\n")
+
+    # Strict Mode Regex: erlaubt nur Buchstaben, Ziffern, Satzzeichen, Whitespace
+    # Satzzeichen: . , ; : ! ? ( ) - ' " … und Leerzeichen/Tab/Zeilenumbruch
+    re_strict = re.compile(r"[^a-zA-Z0-9äöüÄÖÜß .,;:!?()'\"\-\n\r\t]")
+
+
+# 1) HTML-Tags entfernen
+    clean = re_html_tags.sub("", clean)
+
+    # 2) Markdown-Links/Images entfernen (nur Anzeigetext behalten)
+    clean = re_md_link_or_image.sub(r"\1", clean)
+
+    # 3) Einfache Markdown-Formatierungen entfernen
+    clean = re_md_inline_fmt.sub("", clean)
+
+    # 4) Backslashes vor Sonderzeichen auflösen
+    clean = re_unescape_bslash.sub(r"\1", clean)
+
+    # 5) HTML-Entities dekodieren
+    clean = html.unescape(clean)
+
+    # 6) Steuerzeichen entfernen (außer \n, \r, \t)
+    clean = re_control_chars.sub("", clean)
+
+    # 7) Whitespace normalisieren
+    clean = re_space_before_nl.sub("\n", clean).strip()
+
+    # 8) Strict-Filter anwenden (optional)
+    if strict:
+        clean = re_strict.sub("", clean)
+
+    return clean
 
 def generate_embedding(self, text):
     # Return zero vector on empty text
@@ -99,7 +136,7 @@ def query_db(self, sql: str, fetch="one", params=None):
 
 def get_embeddings(request: Request, texts: list, user=Depends(get_verified_user)):
     engine = request.app.state.config.RAG_EMBEDDING_ENGINE
-    model =  request.app.state.config.RAG_EMBEDDING_MODEL
+    model = request.app.state.config.RAG_EMBEDDING_MODEL
 
     embedding_function = get_embedding_function(
         engine,
@@ -118,7 +155,7 @@ def get_embeddings(request: Request, texts: list, user=Depends(get_verified_user
             request.app.state.config.RAG_OPENAI_API_KEY
             if engine == "openai"
             else (
-                'ollama' # request.app.state.config.RAG_OLLAMA_API_KEY
+                request.app.state.config.RAG_OLLAMA_API_KEY
                 if engine == "ollama"
                 else request.app.state.config.RAG_AZURE_OPENAI_API_KEY
             )
@@ -156,5 +193,3 @@ def get_id_by_embedding(vec: List[float], col: str) -> str:
             """), {"col": col, "vec": f"{vec}"}).first()
 
         return str(uuid_tuple[0])
-
-

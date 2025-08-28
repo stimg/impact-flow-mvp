@@ -13,7 +13,6 @@ from fastapi import (
 
 import tiktoken
 
-from langchain_core.documents import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter, TokenTextSplitter
 
 from open_webui.constants import ERROR_MESSAGES

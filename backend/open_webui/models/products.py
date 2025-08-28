@@ -34,6 +34,7 @@ class ProductModel(BaseModel):
     user_experience: Optional[str] = None
     formulation_origin: Optional[str] = None
     history: Optional[str] = None
+    hint: Optional[str] = None
 
 
 class ProcessProductForm(BaseModel):
