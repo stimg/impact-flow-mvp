@@ -42,8 +42,7 @@ router = APIRouter()
 @router.get("/", response_model=Optional[RecommendationModel])
 def find_by_tag(request: Request, tag: str, user=Depends(get_verified_user)):
     print("Tag:", tag)
-    embedding = get_embeddings(request, [tag], user)
-    rec = get_recommendation_by_embedding(embedding[0]) if len(embedding) > 0 else None
+    rec = get_recommendation_by_embedding(tag) if tag else None
 
     if rec and user.role == "admin":
         print("Found recommendation:", rec)

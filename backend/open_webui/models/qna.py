@@ -15,7 +15,6 @@ from open_webui.retrieval.vector.dbs.pgvector import QNASchema
 
 class QNAModel(BaseModel):
     id: UUID4
-    scope: str
     question: str
     answer: str
     hint: str
@@ -36,7 +35,6 @@ def get_qna_by_embedding(vec: List[float], col: str):
 
     return {
         "id": str(qna.id),
-        "scope": qna.scope,
         "question": qna.question_text,
         "answer": qna.answer_text,
         "hint": qna.hint or '',

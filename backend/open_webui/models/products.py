@@ -58,7 +58,7 @@ class ProductsClass:
         product_chunks = get_chunks_by_id(id)
 
         product = {
-            chunk.section: re.sub(r"^.*:\s", "", chunk.chunk_text)
+            chunk.section: chunk.chunk_text
             for chunk in product_chunks
         }
         product["id"] = id

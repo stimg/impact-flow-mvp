@@ -35,7 +35,6 @@
 
     type QNA = {
         id: string;
-        scope: string;
         question: string;
         answer: string;
         hint: string;
@@ -88,7 +87,6 @@
     export let reference_link = '';
 
     export let qna_id = '';
-    export let scope = '';
     export let question = '';
     export let answer = '';
     export let qna_hint = '';
@@ -121,9 +119,7 @@
             || !reference_link
 
     const setQNASubmitDisabled = () =>
-        qna_disabled = !scope
-            || !question
-            || !answer
+        qna_disabled = !question || !answer
 
     const setRecommendationSubmitDisabled = () =>
         recommendations_disabled = !recommended
@@ -134,7 +130,7 @@
     const getProductMetadata = (): Omit<Product, 'id'> => ({
         name: product_name,
         categories: `${$i18n.t('Categories')}: ${categories}`,
-        tags: tags ? `${$i18n.t('Tags')}: ${tags}` : '',
+        tags: tags ? tags : '',
         similar_products: similar_products ? `${$i18n.t('Similar products')}: ${similar_products}` : '',
         recommended_products: recommended_products ? `${$i18n.t('Recommended products')}: ${recommended_products}` : '',
         supporting_products: supporting_products ? `${$i18n.t('Supporting products')}: ${supporting_products}` : '',
@@ -154,7 +150,6 @@
     })
 
     const getQNAMetadata = () => ({
-        scope: scope,
         question: question,
         answer: answer,
         hint: qna_hint,
@@ -171,28 +166,27 @@
     const setProductData = (product: Product) => {
         product_id = product.id;
         product_name = product.name;
-        categories = product.categories;
-        tags = product.tags;
-        similar_products = product.similar_products || '';
-        recommended_products = product.recommended_products || '';
-        supporting_products = product.supporting_products || '';
-        combinable_with = product.combinable_with || '';
-        short_description = product.short_description;
-        product_details = product.product_details || '';
-        target_audience = product.target_audience || '';
-        intake_recommendation = product.intake_recommendation;
-        application_area = product.application_area || '';
-        ingredients = product.ingredients;
-        formulation_origin = product.formulation_origin || '';
-        history = product.history || '';
+        categories = product.categories.replace(`${$i18n.t('Categories')}: `, '');
+        tags = product.tags || '';
+        similar_products = product.similar_products?.replace(`${$i18n.t('Similar products')}: `, '') || '';
+        recommended_products = product.recommended_products?.replace(`${$i18n.t('Recommended products')}: `, '') || '';
+        supporting_products = product.supporting_products?.replace(`${$i18n.t('Supporting products')}: `, '') || '';
+        combinable_with = product.combinable_with?.replace(`${$i18n.t('Combinable with products')}: `, '') || '';
+        short_description = product.short_description.replace(`${$i18n.t('Short description')}: `, '');
+        product_details = product.product_details?.replace(`${$i18n.t('Product details')}: `, '') || '';
+        target_audience = product.target_audience?.replace(`${$i18n.t('Target audience')}: `, '') || '';
+        intake_recommendation = product.intake_recommendation.replace(`${$i18n.t('Intake recommendation')}: `, '');
+        application_area = product.application_area?.replace(`${$i18n.t('Application area')}: `, '') || '';
+        ingredients = product.ingredients.replace(`${$i18n.t('Ingredients')}: `, '');
+        formulation_origin = product.formulation_origin?.replace(`${$i18n.t('Formulation origin')}: `, '') || '';
+        history = product.history?.replace(`${$i18n.t('History')}: `, '') || '';
         prod_hint = product.hint || '';
-        user_experience = product.user_experience || '';
-        reference_link = product.reference_link;
+        user_experience = product.user_experience?.replace(`${$i18n.t('User experience')}: `, '') || '';
+        reference_link = product.reference_link || '';
     }
 
     const setQNAData = (qna: QNA) => {
         qna_id = qna.id;
-        scope = qna.scope;
         question = qna.question;
         answer = qna.answer;
         qna_hint = qna.hint;
@@ -237,7 +231,6 @@
 
     const resetQNAData = (evt: SubmitEvent) => {
         qna_id = '';
-        scope = '';
         question = '';
         answer = '';
         qna_hint = '';
@@ -519,16 +512,6 @@
                           on:submit|preventDefault={onQNASubmit}
                           on:reset|preventDefault={onResetQNAForm}>
                         <input type="hidden" bind:value="{qna_id}">
-
-                        <div class=" mb-5 text-right">
-                            <select class="dark:bg-gray-900 bg-gray-50 w-fit pr-8 rounded-sm px-2 p-1 text-sm outline-hidden text-teal-500" bind:value="{scope}" on:change={setQNASubmitDisabled}>
-                                <option value="">{$i18n.t('Select scope')}</option>
-<!--                                <option value="recommendations">{$i18n.t('Recommendations')}</option>-->
-                                <option value="qna">{$i18n.t('FAQ')}</option>
-                                <option value="global">{$i18n.t('Global')}</option>
-<!--                                <option value="disclaimer">{$i18n.t('Disclaimer')}</option>-->
-                            </select>
-                        </div>
 
                         <label class="mb-0 font-bold text-teal-500" for="question">{$i18n.t('Question')}</label>
                         <input type="text" bind:value="{question}" on:keydown={setQNASubmitDisabled}>

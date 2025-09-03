@@ -93,7 +93,6 @@ class QNASchema(Base):
     __tablename__ = "q_and_a"
 
     id = Column(Uuid, nullable=False, primary_key=True)
-    scope = Column(Text, nullable=False)
     q_embedding = Column(Vector(dim=1024), nullable=True)
     a_embedding = Column(Vector(dim=1024), nullable=True)
 
@@ -115,21 +114,15 @@ class RecommendationSchema(Base):
     tags = Column(Text, nullable=False)
     recommended = Column(Text, nullable=False)
     suitable = Column(Text, nullable=False)
-
+    info = Column(Text, nullable=True)
     tags_arr = Column(ARRAY(Text))
+    tags_search = Column(Text)
     info_tsv = Column(Text)
     vec_tags = Column(Vector(dim=1024))
     vec_info = Column(Vector(dim=1024))
-
+    hint = Column(Text)
     created_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
     updated_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
-
-    if PGVECTOR_PGCRYPTO:
-        info = Column(LargeBinary, nullable=True)
-        hint = Column(LargeBinary, nullable=True)
-    else:
-        info = Column(Text, nullable=True)
-        hint = Column(Text, nullable=True)
 
 
 class PgvectorClient(VectorDBBase):
@@ -351,9 +344,9 @@ class PgvectorClient(VectorDBBase):
                     text(
                         """
                         INSERT INTO q_and_a
-                        (id, scope, question_text answer_text, hint, q_embedding, a_embedding)
+                        (id, question_text, answer_text, hint, q_embedding, a_embedding)
                         VALUES (
-                            :qna.id, :qna.scope,
+                            :qna.id,
                             pgp_sym_encrypt(:qna.question_text, :key),
                             pgp_sym_encrypt(:qna.answer_text, :key),
                             pgp_sym_encrypt(:qna.hint, :key),

@@ -6,6 +6,7 @@ from open_webui.config import OLLAMA_BASE_URL
 from open_webui.internal.db import Base, get_db
 from open_webui.retrieval.utils import generate_ollama_batch_embeddings
 from open_webui.retrieval.vector.dbs.pgvector import RecommendationSchema
+from sqlalchemy import func
 
 
 ####################
@@ -21,13 +22,16 @@ class RecommendationModel(BaseModel):
     info: str
     hint: str
 
-def get_recommendation_by_embedding(vec: List[float]) -> Dict[str, str] or None:
+# We also can handle not only one tag but also CSV string with tags
+def get_recommendation_by_embedding(tags: str) -> Dict[str, str] or None:
     with get_db() as db:
-        recommendation = (db.query(RecommendationSchema)
-                      .order_by(RecommendationSchema.vec_tags.l2_distance(vec))
-                      .limit(1)
-                      .first())
-
+        recommendation = (
+            db.query(RecommendationSchema,
+                     func.similarity(RecommendationSchema.tags_search, tags).label("score"))
+            .order_by(func.similarity(RecommendationSchema.tags_search, tags).desc())
+            .limit(1)
+            .first()
+        )
         return {
             "id": str(recommendation.id),
             "tags": recommendation.tags,

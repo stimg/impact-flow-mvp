@@ -1,10 +1,21 @@
-from pydantic import BaseModel, Field
-import json, requests, re, time, psycopg2
-import numpy as np
-from ollama import Client
-from psycopg2.extras import RealDictCursor
-from openai import OpenAI
+import json
+import psycopg2
+import re
+import time
 from typing import Literal
+from functools import partial
+
+from openai import OpenAI
+from psycopg2.extras import RealDictCursor
+from pydantic import BaseModel, Field
+
+from open_webui.retrieval.functions.utils import (
+    query_db,
+    get_user_name_from_full_name,
+    get_embedding,
+    sanitize_user_input,
+)
+from open_webui.retrieval.functions.data import product_names
 
 
 class Pipe:
@@ -12,12 +23,10 @@ class Pipe:
         RAG_MODEL_ID: Literal[
             "qwen/qwen-2.5-7b-instruct",
             "qwen/qwen2.5-7b-instruct",
-            "qwen/qwen3-8b",
-            "qwen/qwen3-8b-fp8",
             "gpt-4.1-nano-2025-04-14",
         ] = Field(
             default="qwen/qwen-2.5-7b-instruct",
-            description="Model to use for RAG.",
+            description="Model for RAG. Openrouter --> qwen-2.5, Novita --> qwen2.5 (!)",
         )
         TOOLS_MODEL_ID: Literal[
             "qwen/qwen-2.5-7b-instruct",
@@ -25,122 +34,7 @@ class Pipe:
             "gpt-4.1-nano-2025-04-14",
         ] = Field(
             default="qwen/qwen-2.5-7b-instruct",
-            description="Model to use for the tools selection.",
-        )
-        EMBEDDING_MODEL_ID: str = Field(
-            default="bge-m3",
-            description="Model to use for embedding generation.",
-        )
-        PROMPT_LIST: str = Field(
-            default="""
-            Folgende Punkte immer zu beachten:
-            - Produktname
-            - Kategorie
-            - Kurzbeschreibung
-            - Produktwebseite
-            - Eine horizontale Trennlinie (---)
-            
-            Du **musst** das Format exakt einhalten, **ohne Ausnahmen**.  
-            Verwende **vor jeder Sektion eine leere Zeile** (also zwei neue Zeilen), genau so wie hier im Beispiel:
-            
-            **Produktname: Energy-Plus**
-            
-            *Kategorie: Nahrungsergänzung*
-            
-            Kurzbeschreibung: Steigert die Energie im Alltag.
-            
-            Weitere Informationen über das Produkt: [Produktname](<Produktwebseite>)
-            
-            ---
-            
-            Antworte nur in diesem Format und **NICHT anders**.
-            
-            **WICHTIG:**  
-            – Immer **eine komplett leere Zeile** direkt *vor* der Zeile mit `---`  
-            – `---` **muss allein** in seiner eigenen Zeile stehen  
-            – Immer **eine komplett leere Zeile** direkt *nach* `---`, auch wenn es das Ende der Antwort ist
-
-            
-            """,
-            description="System prompt for product list.",
-        )
-        PROMPT_DETAILS: str = Field(
-            default="""
-            Folgende Punkte immer zu beachten:
-            - Produktname: zeige vollständige Produktname.
-            - Produktkategorie.
-            - Produktbeschreibung: Erkläre, was das Produkt ist, welche Hauptmerkmale und Funktionen es hat und welchen Nutzen es den Nutzerinnen bringt.
-            - Zielgruppe: Beschreibe, für wen das Produkt besonders geeignet ist und welche spezifischen Bedürfnisse es erfüllt.
-            - Anwendung: Erkläre, wie das Produkt anzuwenden ist und welche typischen Anwendungsszenarien es gibt.
-            - Vorteile: Hebe die wichtigsten Vorteile hervor, die das Produkt von anderen abheben, und erläutere den Mehrwert für die Nutzerinnen.
-            - Relevante zur Benutzerfrage Abschnitte.
-            - Produktwebseite.
-            
-            Du **musst** das Format exakt einhalten, **ohne Ausnahmen**.  
-            Verwende **vor jeder Sektion eine leere Zeile** (also zwei neue Zeilen), genau so wie hier im Beispiel:
-            
-            **Produktname: Energy-Plus**
-            
-            *Kategorie: Nahrungsergänzung*
-            
-            Produktbeschreibung: Steigert die Energie im Alltag.
-            
-            Zielgruppe: Late Menschen
-            
-            Anwendung: Dreimal pro Tag
-            
-            Vorteile: Günstig und Effektiv
-            
-            Mehr Informationen über das Produkt findest du hier: [Energy-Plus](https://www.ethno-health.com/energy-plus)
-
-            
-            """,
-            description="System prompt for product details.",
-        )
-        PROMPT_PROPERTY: str = Field(
-            default="""
-            Folgende Punkte immer zu beachten:
-            - Produktname: zeige vollständige Produktname **wenn definiert**
-            - Antwort des Assistenten.
-            - Produktwebseite
-            
-            Du **musst** das Format exakt einhalten, **ohne Ausnahmen**. 
-            Verwende **vor jeder Sektion eine leere Zeile** (also zwei neue Zeilen), genau so wie hier im Beispiel:
-            
-            **Produktname: Energy-Plus**
-            
-            Die tägliche Verzehrempfehlung beträgt 15 g Pulver in 150 ml Wasser gelöst.
-            """,
-            description="System prompt for product property.",
-        )
-        PROMPT_QNA: str = Field(
-            default="""
-            Folgende Punkte immer zu beachten:
-            - Antwort des Assistenten.
-            - Produktwebseite
-            
-            Du **musst** das Format exakt einhalten, **ohne Ausnahmen**. 
-            Verwende **vor jeder Sektion eine leere Zeile** (also zwei neue Zeilen), genau so wie hier im Beispiel:
-            
-            Die Produkte von Ethno Health unterstützen die Gesundheit, indem sie sorgfältig ausgewählte Inhaltsstoffe enthalten, die das allgemeine Wohlbefinden fördern, das Immunsystem stärken und die Energiebalance positiv beeinflussen.
-            
-            Mehr Informationen findest du hier: [Productname](https://www.ethno-health.com/reference_link)
-
-            
-            """,
-            description="System prompt for product property.",
-        )
-        TEMPLATE_FOOTER: str = Field(
-            default="\n\n---\n\n*Bitte beachte, dass **alle** Produkte nicht zur Heilung oder Behandlung von Krankheiten dienen!*\n\n",
-            description="Footer template (disclaimer).",
-        )
-        API_BASE_URL: str = Field(
-            default="http://localhost:11434/api",
-            description="Base URL for accessing Ollama API endpoints.",
-        )
-        API_BASE_URL: Literal["http://localhost:11434/api",] = Field(
-            default="http://localhost:11434/api",
-            description="Base URL for accessing Ollama API endpoints.",
+            description="Model for Tools. Openrouter --> qwen-2.5, Novita --> qwen2.5 (!)",
         )
         OPENAI_API_BASE_URL: Literal[
             "https://openrouter.ai/api/v1",
@@ -153,6 +47,188 @@ class Pipe:
         OPENAI_API_KEY: str = Field(
             default="",
             description="OpenAI API key.",
+        )
+        EMBEDDING_MODEL_ID: Literal[
+            "baai/bge-m3",
+            "gpt-4.1-nano-2025-04-14",
+        ] = Field(
+            default="baai/bge-m3",
+            description="Model to use for embedding generation.",
+        )
+        EMBEDDING_API_BASE_URL: Literal[
+            "https://api.novita.ai/openai/v1",
+            "https://api.openai.com/v1",
+        ] = Field(
+            default="https://api.novita.ai/openai/v1",
+            description="OpenAI API URL.",
+        )
+        EMBEDDING_API_KEY: str = Field(
+            default="",
+            description="Embedding API key.",
+        )
+
+        PROMPT_LIST: str = Field(
+            default="""
+            INSTRUCTIONS:
+            - Always use Markdown format.
+            - List all the products from the list, keeping the order in the given list.
+            - For each product, always render:
+              1. Product name as the Markdown link. Take the product name from the JSON "name" property and the product link from the "reference_link" property.
+              2. The em dash (–) surrounded by spaces.
+              3. Product categories in cursive (*italic*).
+
+            - Render every list entry exactly like in this example:
+
+            [Burner](https://www.ethno-health.com/artikeldetail/product) – *Body & Clean*
+            """,
+            description="System prompt for product list.",
+        )
+        PROMPT_LIST_BY_PROPERTY: str = Field(
+            default="""
+            Your goals:
+            1. Do not re-rank or filter. Assume the context is already filtered. Render all items.
+            2. Render **all** products from CONTEXT, **in the same order**, with no omissions or additions.
+            3. Language: **German only**.
+            4. Use the exact output format in “Rendering”.
+
+            Rendering:
+            - For each product, always render:
+              1. Product name as the Markdown link. Take the product name from the JSON "name" property and the product link from the "reference_link" property.
+              2. The em dash (–) surrounded by spaces.
+              3. Product categories in cursive (*italic*).
+              4. The property text.
+
+            - Render **every product exactly** like in this example:            
+            [Burner](https://www.ethno-health.com/artikeldetail/product) – *Body & Clean*
+            
+            Das produkt ist speziell für Sportler entwickelt. Es hilft dabei, die Energie im Alltag 
+            zu steigern und den sportlichen Leistungsgrad zu verbessern.
+
+            """,
+            description="System prompt for product list.",
+        )
+        PROMPT_CATEGORIES: str = Field(
+            default="""
+            INSTRUCTIONS:
+            - Always use Markdown format.
+            - List all categories. Don't use an unordered list format.
+            - For each category render:
+              1. Category name in **bold**.
+              2. The em dash (–) surrounded by spaces.
+              3. Product tags: comma-separated, in cursive (*italic*).
+
+              - Render every category exactly like in this example:
+
+              **Beauty & Lifestyle** – *Gewebe, Kollagenbildung, Haare, Muskeln, Haut, Nägel, Schönheit, Lifestyle*
+            """,
+            description="System prompt for product list.",
+        )
+        PROMPT_DETAILS: str = Field(
+            default="""
+                You MUST take the product name from the JSON "name" property and the product link from the "reference_link" property.
+                You MUST ignore any URLs found in any other fields.
+                Never invent or modify the URL or name.
+
+                INSTRUCTIONS:
+                - Always use Markdown format.
+                - You must always create the following sections using the JSON object from the context:
+                  1. Product name as the Markdown link.
+                  2. On the same line, the em dash (–) surrounded by spaces.
+                  3. On the same line, product categories are always in cursive (*italic*).
+                  4. Tags, always in cursive (*italic*)
+                  5. Product description.
+                  6. Target audience.
+                  7. Application area.
+                  8. Advantages: Highlight the key benefits that set the product apart from others and explain the added value for users.
+                  9. New section with "---".
+                  10. Mentora pro hint (can be empty). DO NOT invent, alter, assume, or extend beyond the context. If the context does not contain a hint, explicitly state: "kein Tipp".
+
+                - Always render section names in bold.
+                - For the "Mentora Pro Tipp" section, always render "Mentora Pro Tipp 💡:" section name before the content.
+                - Always render product details exactly as in this example:
+                [Energy-Plus](https://www.ethno-health.com/energy-plus) – *Sport & Vitaliy*
+                
+                **Schlagworte:** *Sport*
+                
+                **Produktbeschreibung:** Steigert die Energie im Alltag.
+                
+                **Zielgruppe:** Late Menschen
+                
+                **Anwendung:** Dreimal pro Tag
+                
+                **Vorteile:** Günstig und Effektiv
+
+                ---
+
+                **Mentora Pro Tipp 💡:** Lorem ipsum dolor sit amet esse quia sed id consectetur dolore ab non. Lorem ipsum dolor sit amet ipsum irure ut eius mollit sequi do incididunt quia.
+            """,
+            description="System prompt for product details.",
+        )
+        PROMPT_PROPERTY: str = Field(
+            default="""
+                You MUST take the product name from context.name and the product URL from context.reference_link.
+                You MUST render the first line as: [<context.name>](<context.url>) – *<context.categories>*
+                You MUST ignore any URLs found in any other fields.
+                Never invent or modify the URL or name.
+
+                INSTRUCTIONS:
+                - Always use Markdown format.
+                - You must always render:
+                  1. Product name as Markdown link.
+                  2. On the same line, the em dash (–) surrounded by spaces.
+                  3. On the same line, product categories are always in cursive (*italic*).
+                  4. On the new line, product property.
+                  9. New section with "---".
+                  5. Mentora pro hint (can be empty). DO NOT invent, alter, assume, or extend beyond the context. If the context does not contain a hint, explicitly state: "kein Tipp".
+
+                - For the "Mentora Pro Tipp" section, always render "**Mentora Pro Tipp 💡:**" section name before the content.
+                - Always render "Mentora Pro Tipp 💡:" section header in **bold**.
+                - Always render product details exactly as in this example:
+                [Energy-Plus](https://www.ethno-health.com/energy-plus) – *Sport & Vitaliy*
+
+                Lorem ipsum dolor sit amet minim ullamco adipisci et laboris et at voluptas sint tempora eaque non.
+
+                ---
+                
+                **Mentora Pro Tipp 💡:** Lorem ipsum dolor sit amet esse quia sed id consectetur dolore ab non. Lorem ipsum dolor sit amet ipsum irure ut eius mollit sequi do incididunt quia.
+            """,
+            description="System prompt for product property.",
+        )
+        PROMPT_QNA: str = Field(
+            default="""
+            You MUST answer strictly and only based on the provided context.
+            - Use ALL relevant information from the context directly related to the user’s question.  
+            - DO NOT invent, assume, or extend beyond the context.
+            - Always answer in complete, competent, and professional German.  
+            - Preserve accuracy and factual correctness exactly as given in the context.  
+            - Do not add external knowledge, speculation, or assumptions.  
+            - Ensure the answer is concise but fully covers all information present in the context related to the question.
+            - At the end render Mentora pro hint (can be empty). DO NOT invent, alter, assume, or extend beyond the context. If the context does not contain a hint, explicitly state: "kein Tipp".
+
+            """,
+            description="System prompt for product property.",
+        )
+        PROMPT_NOTHING_FOUND: str = Field(
+            default="""
+            INSTRUCTIONS:
+            Render only these points:
+            - Politely say we've found nothing for your request.
+            - Ask to refine the query.
+            - Last, you always **must** suggest contacting our customer support. Render all three of our contacts:
+              1. Phone: +41 79 894 66 66
+              2. WhatsApp: +41 79 894 66 66 or ~Impact Flow
+              3. Buche einen Termin  in unserem Kalender.
+            - Always render calendar contact as a Markdown link to https://www.eTermin.net/Love369Wins/serviceid/576811?noinitscroll=1.
+            - Be concise.
+
+            - **NEVER** invent answer!
+            - **NEVER** give ANY recommendations or product links outside the provided context!
+            """,
+            description="System prompt for product property.",
+        )
+        TEMPLATE_FOOTER: str = Field(
+            default="\n\n---\n\n*Bitte beachte, dass **alle** Produkte nicht zur Heilung oder Behandlung von Krankheiten dienen!*\n\n",
+            description="Footer template (disclaimer).",
         )
 
         # PostgreSQL connection configuration
@@ -171,76 +247,15 @@ class Pipe:
             default="impact_flow", description="PostgreSQL database name."
         )
 
-    ollama = Client(
-        host="http://localhost:11434",
-        headers={"Content-Type": "application/json", "Authorization": "Bearer ollama"},
-    )
-
-    context_product = {}
-
     def __init__(self):
         self.valves = self.Valves()
 
-    def get_user_name_from_full_name(self, username: str | None) -> str:
-        if not username:
-            return ""
+        self.query_db = partial(query_db, self)
+        self.get_user_name_from_full_name = partial(get_user_name_from_full_name, self)
+        self.get_embedding = partial(get_embedding, self)
+        self.sanitize_user_input = partial(sanitize_user_input, self)
 
-        name_regex = r"^(.+?)(?=\s+(?:von(?:\s+(?:der|den|dem))?|van(?:\s+(?:der|den))?|zu|zur|zum|vom|de|del|du)\b|\s+\S+$)"
-        match = re.match(name_regex, username or "")
-        return match.group(1) if match else ""
-
-    def generate_embedding(self, text):
-        res = requests.request(
-            method="POST",
-            url=f"{self.valves.API_BASE_URL}/embed",
-            headers={
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": self.valves.EMBEDDING_MODEL_ID,
-                "input": text,
-                "options": {
-                    "num_ctx": 2048,
-                    "top_k": 3,
-                    "top_p": 0.3,
-                    "temperature": 0.3,
-                },
-            },
-        )
-
-        embeddings = res.json()["embeddings"]
-        vector = embeddings[0] or []
-        # print(f"Embedding: {vector}")
-
-        return vector
-
-    def query_db(self, query):
-        """
-        Queries the PostgreSQL database using the provided user message.
-        For example, it searches for a matching answer in the FAQ table.
-        """
-        try:
-            conn = psycopg2.connect(
-                host=self.valves.POSTGRES_HOST,
-                port=self.valves.POSTGRES_PORT,
-                user=self.valves.POSTGRES_USER,
-                password=self.valves.POSTGRES_PASSWORD,
-                database=self.valves.POSTGRES_DATABASE,
-            )
-            cur = conn.cursor(cursor_factory=RealDictCursor)
-
-            cur.execute(query)
-            results = cur.fetchall()
-            cur.close()
-            conn.close()
-
-            if not results:
-                return "No matching product found in the database."
-
-            return results
-
-        except Exception as e:
-            return f"Database error: {e}"
+    context_product = {}
 
     def get_product_list(self):
         """
@@ -250,52 +265,59 @@ class Pipe:
         query = """
                 SELECT
                     product_id,
-                    jsonb_object_agg(
-                            vmetadata->>'section',
-                            chunk_text
-                    ) AS info
-                FROM product_chunks
-                WHERE vmetadata->>'section' IN ('name', 'categories', 'short_description', 'reference_link')
-                GROUP BY product_id
-                LIMIT 10 \
+                    info
+                FROM (
+                         SELECT
+                             product_id,
+                             jsonb_object_agg(
+                                     section,
+                                     CASE section
+                                         WHEN 'name' THEN regexp_replace(vmetadata->>'name', '^\s*Produktname:\s*', '')
+                                         WHEN 'categories' THEN regexp_replace(chunk_text, '^\s*Kategorien:\s*', '')
+                                         WHEN 'reference_link' THEN regexp_replace(chunk_text, '^\s*Produk(t?)webseite:\s*', '')
+                                         END
+                             ) AS info,
+                             /* derive a stable sort key from the name */
+                             max(regexp_replace(vmetadata->>'name', '^\s*Produktname:\s*', ''))
+                             FILTER (WHERE section = 'name') AS sort_name
+                         FROM product_chunks
+                         WHERE section IN ('name', 'categories', 'reference_link')
+                         GROUP BY product_id
+                     ) t
+                ORDER BY sort_name NULLS LAST \
                 """
 
-        results = self.query_db(query)
+        results = self.query_db(query, "all")
 
         return {
             "prompt": self.valves.PROMPT_LIST,
-            "data": [
-                {
-                    "Produktinfo": item["info"],
-                }
-                for item in results
-            ],
+            "data": [{**item["info"]} for item in results],
         }
 
     def get_category_list(self):
         """
         Queries the PostgreSQL DB for the list of all available categories.
         """
-        query = f"""
-            WITH categories AS (
-                SELECT product_id, substring(chunk_text FROM 'Kategorien: (.*)') AS category
-                FROM product_chunks
-                WHERE vmetadata->>'section' = 'categories'
-            ),
-                 tags AS (
-                     SELECT product_id, unnest(string_to_array(substring(chunk_text FROM 'Schlagworte: (.*)'), ', ')) AS tag
-                     FROM product_chunks
-                     WHERE vmetadata->>'section' = 'tags'
-                 )
-            SELECT
-                c.category,
-                ARRAY_AGG(DISTINCT t.tag) AS tags
-            FROM categories c
-                     JOIN tags t ON t.product_id = c.product_id
-            GROUP BY c.category
-            ORDER BY c.category
-        """
-        results = self.query_db(query)
+        query = """
+                WITH categories AS (
+                    SELECT product_id, substring(chunk_text FROM 'Kategorien: (.*)') AS category
+                    FROM product_chunks
+                    WHERE section = 'categories'
+                ),
+                     tags AS (
+                         SELECT product_id, unnest(string_to_array(substring(chunk_text FROM 'Schlagworte: (.*)'), ', ')) AS tag
+                         FROM product_chunks
+                         WHERE section = 'tags'
+                     )
+                SELECT
+                    c.category,
+                    ARRAY_AGG(DISTINCT t.tag) AS tags
+                FROM categories c
+                         JOIN tags t ON t.product_id = c.product_id
+                GROUP BY c.category
+                ORDER BY c.category \
+                """
+        results = self.query_db(query, "all")
         # print(f"---------> results: {results}")
         # categories = [f"{result['category']}" for result in results]
 
@@ -307,13 +329,7 @@ class Pipe:
         # print(f"---------> data: {data}")
 
         return {
-            "prompt": """
-            Render categories **as a list**.
-            Every category name **must be** rendered in **bold**
-            After every category in the same line render 
-            - em dash
-            - the comma separated tag list in the parentheses rendered in *italic*
-            """,
+            "prompt": self.valves.PROMPT_CATEGORIES,
             "data": data,
         }
 
@@ -325,90 +341,170 @@ class Pipe:
         if not category:
             return {"prompt": "", "data": "Category is not defined"}
 
-        vector_category = self.generate_embedding(category)
+        vector_category = self.get_embedding(category)
+        # print(f"---> Category vector: {vector_category}")
 
-        query = f"""
-            SELECT
-                product_id,
-                jsonb_object_agg(
-                    vmetadata->>'section',
-                    chunk_text
-                ) AS info
-            FROM product_chunks
-            WHERE product_id IN (
-                SELECT product_id
+        query = """
+                SELECT product_id,
+                       jsonb_object_agg(
+                               section,
+                               chunk_text
+                       ) AS info
                 FROM product_chunks
-                WHERE chunk_text IN (
-                    SELECT chunk_text
+                WHERE product_id IN (
+                    SELECT product_id
                     FROM product_chunks
-                    WHERE vmetadata->>'section' = 'categories'
-                    ORDER BY embedding <#> '{vector_category}'
-                    LIMIT 2
+                    WHERE chunk_text IN (
+                        SELECT chunk_text
+                        FROM product_chunks
+                        WHERE section = 'categories'
+                        ORDER BY embedding <#> %s::vector
+                        LIMIT 2
+                    )
                 )
-            )
-            AND vmetadata->>'section' IN ('name', 'categories', 'short_description', 'reference_link')
-            GROUP BY product_id
-        """
+                  AND section IN ('name', 'categories', 'short_description', 'reference_link')
+                GROUP BY product_id \
+                """
 
-        results = self.query_db(query)
+        results = self.query_db(query, "all", (vector_category,))
+
+        if not results or not len(results):
+            return None
+
         return {
             "prompt": (
                 self.valves.PROMPT_LIST
                 if len(results) > 1
-                else f"{self.valves.PROMPT_DETAILS}"
+                else self.valves.PROMPT_DETAILS
             ),
-            "data": [
-                {
-                    "Produktinfo": item["info"],
-                }
-                for item in results
-            ],
+            "data": [{**item["info"]} for item in results],
         }
 
-    def get_products_by_property(self, property: str, objective: str):
+    def get_products_by_property(
+            self, property: str, objectives: list[str], user_message=""
+    ):
         """
         Queries the PostgreSQL database using the optional categories list.
         For example, it searches for all available products in the category or database.
         """
 
-        prop = property if property != "application_area" else "tags"
+        # Change search to tags instead of application area for better results
+        if property == "xxx_application_area":
+            query = """
+                    WITH objectives AS (
+                        /* normalize each objective term (passed as text[]) */
+                        SELECT ARRAY_AGG(trim(both from normalize_csv(o)::text)) AS oarr
+                        FROM unnest(%s::text[]) AS u(o)
+                    ),
+                         tags AS (
+                             /* extract & normalize tags from the 'tags' section rows */
+                             SELECT
+                                 pc.product_id,
+                                 ARRAY_AGG(trim(both from normalize_csv(t)::text)) AS ntags
+                             FROM (
+                                      SELECT
+                                          product_id,
+                                          unnest(
+                                                  string_to_array(
+                                                          regexp_replace(chunk_text, '^\s*Schlagworte:\s*', '', 'i'),
+                                                          ','
+                                                  )
+                                          ) AS t
+                                      FROM product_chunks
+                                      WHERE section = 'tags'
+                                  ) s
+                                      JOIN product_chunks pc USING (product_id)
+                             GROUP BY pc.product_id
+                         ),
+                         candidates AS (
+                             /* require that the product has a non-empty row for the requested section
+                                and at least one tag/objective intersection */
+                             SELECT DISTINCT pc.product_id
+                             FROM product_chunks pc
+                                      JOIN tags tg USING (product_id)
+                                      CROSS JOIN objectives o
+                             WHERE pc.section = 'tags'
+                               AND pc.chunk_text <> ''
+                               AND tg.ntags && o.oarr
+                         ),
+                         scored AS (
+                             SELECT
+                                 t.product_id,
+                                 /* how many objectives are present in tags */
+                                 (SELECT COUNT(*) FROM unnest(t.ntags) tt WHERE tt = ANY(o.oarr)) AS match_count
+                             FROM tags t
+                                      JOIN candidates c ON c.product_id = t.product_id
+                                      CROSS JOIN objectives o
+                         ),
+                         top AS (
+                             SELECT product_id
+                             FROM scored
+                             WHERE match_count > 0
+                             ORDER BY match_count DESC
+                             -- LIMIT 3
+                         )
+                    SELECT
+                        pc.product_id,
+                        jsonb_object_agg(
+                                pc.section,
+                                CASE section
+                                    WHEN 'name' THEN regexp_replace(vmetadata->>'name', '^\\s*Produktname:\\s*', '')
+                                    WHEN 'categories' THEN regexp_replace(chunk_text, '^\\s*Kategorien:\\s*', '')
+                                    WHEN 'reference_link' THEN regexp_replace(chunk_text, '^\\s*Produk(t?)webseite:\\s*', '')
+                                    -- WHEN 'application_area' THEN regexp_replace(chunk_text, '^\\s*Anwendungsbereich:\\s*', '')
+                                    WHEN 'tags' THEN regexp_replace(chunk_text, '^\\s*Schlagworte:\\s*', '')
+                                    END
+                        ) AS info
+                    FROM product_chunks pc
+                             JOIN top USING (product_id)
+                    WHERE pc.section IN ('name', 'tags', 'categories', 'reference_link')
+                    GROUP BY pc.product_id
+                    ORDER BY (SELECT match_count FROM scored s WHERE s.product_id = pc.product_id) DESC; \
+                    """
+            params = (objectives,)
+        else:
+            query = """
+                    SELECT
+                        product_id,
+                        jsonb_object_agg(
+                                section,
+                                chunk_text
+                        ) AS info
+                    FROM product_chunks
+                    WHERE product_id IN (
+                        SELECT product_id
+                        FROM product_chunks
+                        WHERE section = %s
+                          AND chunk_text <> ''
+                          AND abs(embedding <#> %s::vector) > 0.5
+                        ORDER BY abs(embedding <#> %s::vector) DESC
+                        LIMIT 3
+                    )
+                      AND section IN ('name', 'categories', %s, 'reference_link')
+                    GROUP BY product_id \
+                    """
 
-        vector = self.generate_embedding(objective)
+            # vector = self.get_embedding(" ".join(objectives))
+            vector = self.get_embedding(user_message)
+            params = (property, vector, vector, property)
 
-        query = f"""
-            SELECT
-                product_id,
-                jsonb_object_agg(
-                    vmetadata->>'section',
-                    chunk_text
-                ) AS info
-            FROM product_chunks
-            WHERE product_id IN (
-                SELECT product_id
-                FROM product_chunks
-                WHERE vmetadata->>'section' = '{prop}'
-                AND chunk_text <> ''
-                AND abs(embedding <#> '{vector}') > 0.3
-                ORDER BY abs(embedding <#> '{vector}') DESC
-                LIMIT 3
-            )
-            AND vmetadata->>'section' IN ('name', 'categories', '{property}', 'reference_link')
-            GROUP BY product_id
-        """
-
-        results = self.query_db(query)
+        results = self.query_db(query, "all", params)
         # print(f"----> Results: {results}")
 
-        if isinstance(results, str):
-            return {"prompt": "", "data": "No products found."}
+        if isinstance(results, str) or not len(results):
+            return None
 
         return {
             "prompt": (
-                self.valves.PROMPT_LIST
-                if len(results) > 1
-                else f"{self.valves.PROMPT_DETAILS}"
+                self.valves.PROMPT_LIST_BY_PROPERTY
+                # if len(results) > 1
+                # else self.valves.PROMPT_DETAILS
             ),
-            "data": [{"Produktinfo": item["info"]} for item in results],
+            "data": (
+                [{"product_info": row["info"]} for row in results]
+                # if len(results) > 1
+                # else results[0]["info"]
+            ),
         }
 
     def get_product_details(self, product_name):
@@ -417,46 +513,56 @@ class Pipe:
         For example, it searches for a matching product in the database.
         """
         if not product_name:
-            return {"prompt": "", "data": "Product is not defined"}
+            return None
 
         # print(f"-----> product_name: {product_name}")
 
-        vector = self.generate_embedding(product_name)
+        vector = self.get_embedding(product_name)
 
-        query = f"""
-            SELECT
-                product_id,
-                jsonb_object_agg(
-                    vmetadata->>'section',
-                    chunk_text
-                ) AS product_info
-            FROM product_chunks
-            WHERE product_id IN (
-                SELECT product_id
+        query = """
+                SELECT
+                    jsonb_object_agg(
+                            section,
+                            CASE section
+                                WHEN 'name' THEN regexp_replace(chunk_text, '^\\s*Produktname:\\s*', '', 'i')
+                                WHEN 'reference_link' THEN regexp_replace(chunk_text, '^\\s*Produk(t?)webseite:\\s*', '', 'i')
+                                ELSE chunk_text
+                                END
+                    )
                 FROM product_chunks
-                WHERE vmetadata->>'section' = 'name'
-                ORDER BY embedding <#> '{vector}'
-                LIMIT 1
-            )
-            GROUP BY product_id
-        """
+                WHERE product_id IN (
+                    SELECT product_id
+                    FROM product_chunks, abs(embedding <#> %s::vector) as r
+                    WHERE section = 'name'
+                      AND r > 0.5
+                    ORDER BY r DESC
+                    LIMIT 1
+                )
+                  AND section IN (
+                                  'name',
+                                  'reference_link',
+                                  'categories',
+                                  'tags',
+                                  'target_audience',
+                                  'short_description',
+                                  'product_details',
+                                  'intake_recommendation',
+                                  'application_area',
+                                  'ingredients'
+                    ) \
+                """
 
-        results = self.query_db(query)
-        # print(f"Results: {results}")
+        result = self.query_db(query, "val", (vector,))
+        # print(f"Result: {result}")
 
-        if not results:
-            return "No matching product found in the database."
+        if not result:
+            return None
 
-        product_info = results[0]["product_info"]
-
-        # print(f"Produkt details: {product_info}")
+        # print(f"Produkt details: {result['product_info']}")
 
         return {
-            "prompt": f"{self.valves.PROMPT_DETAILS}",
-            "data": {
-                "product_id": str(results[0]["product_id"]),
-                **product_info,
-            },
+            "prompt": self.valves.PROMPT_DETAILS,
+            "data": result,
         }
 
     Property = Literal[
@@ -465,7 +571,6 @@ class Pipe:
         "application_area",
         "ingredients",
         "formulation_origin",
-        "history",
         "user_experience",
     ]
 
@@ -475,55 +580,53 @@ class Pipe:
         For example, when the user asks about the specific product property
         like target group, application area, user feedback, ingredients, etc.
         """
-        # print(f"-----> product_name param: {product_name}")
-
         name = product_name or self.context_product.get("name", "")
 
         # print(f"-----> property: {property}")
         # print(f"-----> context product: {self.context_product}")
-        # print(f"-----> product_name: {name}")
+        # print(f"-----> name: {name}")
+        # print(f"-----> product_name: {product_name}")
 
         if not property or not name:
-            return {"prompt": "", "data": "Product or property name is not defined."}
+            return None
 
-        vector_property = self.generate_embedding(property)
-        vector_name = self.generate_embedding(f"Poduktname: {name}")
+        vector_property = self.get_embedding(property)
+        vector_name = self.get_embedding(f"Poduktname: {name}")
 
-        query = f"""
-            SELECT vmetadata,
-                chunk_text
-                AS info
-            FROM product_chunks
-            WHERE product_id IN (SELECT product_id
+        query = """
+                SELECT jsonb_object_agg(
+                               section,
+                               CASE section
+                                   WHEN 'name' THEN regexp_replace(chunk_text, '^\\s*Produktname:\\s*', '', 'i')
+                                   WHEN 'reference_link' THEN regexp_replace(chunk_text, '^\\s*Produk(t?)webseite:\\s*', '', 'i')
+                                   ELSE chunk_text
+                                   END
+                       )
                 FROM product_chunks
-                WHERE vmetadata ->> 'section' = 'name'
-                ORDER BY embedding <#> '{vector_name}'
-                LIMIT 1)
-            AND vmetadata ->> 'section' = '{property}'
-        """
+                WHERE product_id IN (SELECT product_id
+                                     FROM product_chunks
+                                     WHERE section = 'name'
+                                     ORDER BY embedding <#> %s::vector
+                                     LIMIT 1)
+                  AND section in ('name', 'categories', %s, 'reference_link') \
+                """
 
-        results = self.query_db(query)
-        # print(f"-----> Results: {results}")
+        result = self.query_db(query, "val", (vector_name, property))
+        # print(f"-----> Result: {result}")
 
-        if not results:
-            return "No matching product found in the database."
+        if not result:
+            return None
 
-        name = results[0]["vmetadata"]["name"]
-        url = results[0]["vmetadata"]["reference_link"]
-
-        if product_name and self.context_product.get("name", "") != product_name:
-            self.context_product = {"name": name, "url": url}
+        # Set new context product (not needed)
+        # if product_name and self.context_product.get("name", "") != product_name:
+        #     self.context_product = {"name": result["name"], "url": result["reference_link"]}
 
         return {
             "prompt": f"{self.valves.PROMPT_PROPERTY}",
-            "data": {
-                "Produktname": name,
-                "Produktwebseite": url,
-                "Antwort des Assistenten": results[0]["info"],
-            },
+            "data": {**result},
         }
 
-    def get_qna_answer(self, topic, user_message):
+    def get_qna_answer(self, user_message):
         """Queries the PostgreSQL Q&A database for the related disclaimer
         if the user asks questions about pregnancy, medicines, or other stuff, not directly connected to the product properties.
         Examples:
@@ -534,157 +637,32 @@ class Pipe:
         """
 
         if not user_message:
-            return {"prompt": "", "data": "User message is not defined"}
+            return None
 
         # print(f"--------> User message: {user_message}")
-        query_vector = self.generate_embedding(user_message)
+        query_vector = self.get_embedding(user_message)
 
-        query = f"""
-            SELECT answer_text
-            FROM q_and_a
-            WHERE scope = '{topic}'
-            ORDER BY q_embedding <#> '{query_vector}'
-            LIMIT 1
-        """
-        results = self.query_db(query)
-        # print(f"-----> Results: {results}")
+        query = """
+                SELECT answer_text
+                FROM q_and_a
+                ORDER BY q_embedding <#> %s::vector
+                LIMIT 1 \
+                """
+        result = self.query_db(query, "val", (query_vector,))
+        # print(f"-----> Result: {result}")
 
-        if not results:
-            return {
-                "prompt": "",
-                "data": {
-                    "Answer": "There is no suitable answer in our database. Please contact our customer service.",
-                },
-            }
-
-        if topic == "general" or not self.context_product:
-            name = "Ethno Health"
-            url = "https://www.ethno-health.com"
-            prompt = self.valves.PROMPT_QNA
-        else:
-            name = self.context_product.get("name", "")
-            url = self.context_product.get("url", "")
-            prompt = self.valves.PROMPT_PROPERTY
+        if not result:
+            return None
 
         return {
-            "prompt": f"{prompt}",
+            "prompt": self.valves.PROMPT_QNA,
             "data": {
-                "Produktname": name,
-                "Produktwebseite": url,
-                "Antwort": f"{results[0]['answer_text']}",
+                "name": self.context_product.get("name", "") or "Ethno Health",
+                "reference_link": self.context_product.get("url", "")
+                                  or "https://www.ethno-health.com",
+                "answer": result,
             },
         }
-
-    ### Tools implemenatation
-
-    def get_user_experience(self, product_name=""):
-        """
-        Queries the PostgreSQL database for the user feedback, usage, and user experience for the product with the given name.
-        Use it when the user asks questions about product usage and user experience ans stories by using the product.
-        Examples:
-        - What do the people say about the product?
-        - Are there any user stories about the product usage and results?
-        - How do the users rate the product?
-        - Do you have any user opinions about the product?
-
-        "Ethno Health **CAN NOT BE** the product name"
-        """
-
-        return self.get_product_property("user_experience", product_name)
-
-    def get_product_ingredients(self, product_name=""):
-        """
-        Queries the PostgreSQL database for the particular product ingredients.
-        Use it when the context product is defined and the user asks a concrete question about the particular product.
-
-        **DO NOT** use it when the user asks common questions about 'Ethno Health' products
-        immune system support, vitality, selected ingredients, quality standards,
-        product quality, sustainable sourcing, environmental protection,
-        global communities, Ethno Health, natural ingredients, health supplements.
-        """
-
-        return self.get_product_property("ingredients", product_name)
-
-    def get_product_application_area(self, product_name=""):
-        """
-        Queries the PostgreSQL database for the particular product application area.
-        Use it when the context product is defined and the user asks a concrete
-        question about the particular product applications.
-        Examples:
-        - What is this product for?
-        - Is the product suitable for losing weight?
-        - Can this product improve concentration?
-
-        **DO NOT** use it when the user asks common questions about 'Ethno Health' products
-        immune system support, vitality, selected ingredients, quality standards,
-        product quality, sustainable sourcing, environmental protection,
-        global communities, Ethno Health, natural ingredients, health supplements."""
-
-        return self.get_product_property("application_area", product_name)
-
-    def get_intake_recommendation(self, product_name=""):
-        """
-        Queries the PostgreSQL database for the intake recommendations.
-        """
-        return self.get_product_property("intake_recommendation", product_name)
-
-    def get_target_audience(self, product_name=""):
-        """
-        Queries the PostgreSQL database for the target people groups and matching audience.
-        """
-        return self.get_product_property("target_audience", product_name)
-
-    def get_formulation_origin(self, product_name=""):
-        """
-        Queries the PostgreSQL database for the recipe or formulation origin.
-        """
-        return self.get_product_property("formulation_origin", product_name)
-
-    def get_product_history(self, product_name=""):
-        """
-        Queries the PostgreSQL database for the history of the product creation, its author, country, circumstances, origin, or invention.
-
-        *USE IT* when the user asks about a **particular historical** product background.
-
-        **DO NOT USE** it when the user asks question about **Ethno Health* product production, special features, quality standards, or product requirements.
-        """
-        return self.get_product_property("history", product_name)
-
-    def get_disclaimer(self, user_message):
-        """
-        Queries the PostgreSQL Q&A database for the related disclaimer if the user asks questions about pregnancy, medicines, or other stuff, not directly connected to the product properties.
-        Examples:
-        - How does essence aminos affect the skin during pregnancy?
-        - Can I consume the product during pregnancy?
-        - Can pregnant women use Ethno Health products?
-        - Can the product be taken while using medication?
-        - May I use the product if I am taking other medications?
-        - Are there any contraindications for taking the product?
-        """
-
-        if not user_message:
-            return {"prompt": "", "data": "User message is not defined"}
-
-        return self.get_qna_answer("disclaimer", user_message)
-
-    def get_general_info(self, user_message):
-        """Queries the PostgreSQL Q&A database for the related information if the user asks questions
-        about the **Ethno Health** products, quality, brand, traditional knowledge, research, nutrition,
-        sustainable nutrition, vegan products, natural ingredients, immune system support, vitality boost,
-        traditional medicine, modern science, well-being, plant-based nutrients,
-        not directly connected to the product properties.
-        Examples:
-        - I have heard that dietary supplements are sometimes viewed critically. What makes Ethno Health’s products special?
-        - Are Ethno Health’s products suitable for vegetarians and vegans?
-        - How do vegetarians and vegans benefit from the comprehensive product range offered by Ethno Health?
-        - How does Ethno Health promote sustainability in sourcing its ingredients?
-        - What quality standards does Ethno Health meet in the production of its products?
-        - How does Ethno Health help support health?
-        """
-        if not user_message:
-            return {"prompt": "", "data": "User message is not defined"}
-
-        return self.get_qna_answer("general", user_message)
 
     ### --- PIPE funciton ---
     def pipe(self, body: dict, __user__: dict):
@@ -695,6 +673,16 @@ class Pipe:
         """
         print(f"pipe: {__name__}")
         # print(f"\nBody: {body}\n")
+
+        self.openai = OpenAI(
+            base_url=self.valves.OPENAI_API_BASE_URL,
+            api_key=self.valves.OPENAI_API_KEY,
+        )
+
+        self.embedding = OpenAI(
+            base_url=self.valves.EMBEDDING_API_BASE_URL,
+            api_key=self.valves.EMBEDDING_API_KEY,
+        )
 
         # Extract the user's first name to use in answers
         username = self.get_user_name_from_full_name(__user__["name"])
@@ -707,183 +695,54 @@ class Pipe:
             return "No messages provided in the request body."
 
         for message in messages:
+            # print(f"---> Message: {message}")
             if message.get("role", "") == "system":
                 system_message = message.get("content", "")
                 # print(f"\n-----> System message: {system_message}\n\n")
 
-            if message.get("role", "") == "assistant":
+            elif message.get("role", "") == "assistant":
                 assistant_message = message.get("content", "")
-                # print(f"\n-----> Assistant message: {system_message}\n\n")
+                # print(f"\n-----> Assistant message: {assistant_message}\n\n")
 
-                pattern_name = r"^\s*\**Produktname:\s(.+?)\**$"
-                pattern_url = r"https:\/\/www\.ethno-health\.com\/artikeldetail[^)]+"
-                match_name = re.match(pattern_name, assistant_message, re.MULTILINE)
-                match_url = re.search(pattern_url, assistant_message, re.MULTILINE)
-                # print(f"-----> Match name: {match_name}")
-                # print(f"-----> Match url: {match_url}")
+                pattern = r"\[([äöüßÄÖÜa-zA-Z0-9\s\-!]+)\]\((https://[^\s)]+)\)"
+                name = None
+                url = None
 
-                if match_name:
+                for match in re.finditer(pattern, assistant_message):
+                    name = match.group(1)
+                    url = match.group(2)
+                    # print("Name:", name)
+                    # print("URL:", url)
+
+                if name and "/artikeldetail/" in url:
                     self.context_product = {
-                        "name": match_name.group(1) if match_name else "",
-                        "url": match_url.group() if match_url else "",
+                        "name": name if name else "",
+                        "url": url if url else "",
                     }
                     # print(
-                    #     f"-----> Context product from history: {self.context_product}"
+                    # f"-----> Context product from history: {self.context_product}"
                     # )
 
-            if message.get("role", "") == "user":
+            elif message.get("role", "") == "user":
                 user_message = message.get("content", "")
-                user_message = re.sub(r"\s[!?\.]", "", user_message)
+                user_message = (
+                    sanitize_user_input(user_message)
+                    if user_message
+                    else "EMPTY_QUERY_SENTINEL"
+                )
                 # print(f"-----> User message: {user_message}")
 
         # Define variables for LLM
-        tools = [
-            self.get_product_list,
-            self.get_category_list,
-            self.get_product_details,
-            self.get_products_by_category,
-            # self.get_products_by_application,
-            self.get_products_by_property,
-            self.get_user_experience,
-            self.get_product_ingredients,
-            self.get_product_application_area,
-            self.get_intake_recommendation,
-            self.get_target_audience,
-            self.get_formulation_origin,
-            self.get_product_history,
-            self.get_disclaimer,
-            self.get_general_info,
-        ]
-
         handlers = {
             "get_product_list": self.get_product_list,
             "get_category_list": self.get_category_list,
             "get_products_by_category": self.get_products_by_category,
-            # "get_products_by_application": self.get_products_by_application,
             "get_products_by_property": self.get_products_by_property,
             "get_product_details": self.get_product_details,
-            "get_user_experience": self.get_user_experience,
-            "get_product_ingredients": self.get_product_ingredients,
-            "get_product_application_area": self.get_product_application_area,
-            "get_intake_recommendation": self.get_intake_recommendation,
-            "get_target_audience": self.get_target_audience,
-            "get_formulation_origin": self.get_formulation_origin,
-            "get_product_history": self.get_product_history,
-            "get_disclaimer": self.get_disclaimer,
-            "get_general_info": self.get_general_info,
+            "get_product_property": self.get_product_property,
+            "get_qna_answer": self.get_qna_answer,
         }
 
-        product_name_parameter = {
-            "type": "object",
-            "properties": {
-                "product_name": {
-                    "type": "string",
-                    "description": "Product name extracted from the context",
-                },
-            },
-            "required": ["product_name"],
-        }
-
-        opt_product_name_parameter = {
-            "type": "object",
-            "properties": {
-                "product_name": {
-                    "type": "string",
-                    "description": "Product name extracted from the context",
-                }
-            },
-        }
-
-        target_context_parameter = {
-            "type": "object",
-            "properties": {
-                "target_context": {
-                    "type": "string",
-                    "description": "Target or expected context product usage extracted from the user request",
-                }
-            },
-            "required": ["target_context"],
-        }
-
-        user_message_parameter = {
-            "type": "object",
-            "properties": {
-                "user_message": {
-                    "type": "string",
-                    "description": "User message",
-                }
-            },
-            "required": ["user_message"],
-        }
-
-        no_parameters = {"type": "object", "properties": {}}
-
-        objective_parameter = {
-            "type": "object",
-            "properties": {
-                "objective": {
-                    "type": "string",
-                    "description": "Query objective extracted from user message",
-                }
-            },
-            "required": ["objective"],
-        }
-
-        category_parameter = {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "string",
-                    "description": "Category name extracted from user message",
-                    "enum": [
-                        "Produktübersicht",
-                        "Ethno-Rezepturen",
-                        "Chinesische Rezepturen",
-                        "Tibetische Rezeptur LUNG" "Omega-Öle & Vitalkomplex",
-                        "Omega Go!",
-                        "Ethno-Hausapotheke",
-                        "Vitality & Family",
-                        "Beauty & Lifestyle",
-                        "Body & Clean",
-                        "Bundles",
-                        "Shape Weight Management",
-                        "Ethno-Testsatz",
-                        "Ethno Health Coach",
-                        "Für Kinder geeignet",
-                        "Ethno-Events",
-                    ],
-                }
-            },
-            "required": ["category"],
-        }
-
-        property_parameter = {
-            "type": "object",
-            "properties": {
-                "property": {
-                    "type": "string",
-                    "description": "Product property extracted from user message",
-                    "enum": [
-                        "target_audience",
-                        "intake_recommendation",
-                        "application_area",
-                        "ingredients",
-                        "formulation_origin",
-                        "history",
-                        "user_experience",
-                    ],
-                }
-            },
-            "required": ["property"],
-        }
-
-        """
-                {
-                    "name": "get_products_by_application",
-                    "description": "Searches for the application and use cases like something for muscle building or concentration, against cough or headache, etc.",
-                    "parameters": target_context_parameter,
-                },
-        """
         tools_schema = [
             {
                 "type": "function",
@@ -920,25 +779,28 @@ class Pipe:
                     "description": """
                     Fetches a list of products in the category.
                     
-                    Category names which must be extracted from user message:
-                        - Ethno-Rezepturen
-                        - Chinesische Rezepturen
-                        - Tibetische Rezeptur LUNG
-                        - Omega-Öle & Vitalkomplex
-                        - Omega Go!
-                        - Ethno-Hausapotheke
-                        - Vitality & Family
-                        - Beauty & Lifestyle
-                        - Body & Clean
-                        - Bundles
-                        - Shape Weight Management
-                        - Ethno-Testsatz
-                        - Ethno Health Coach
-                        - Für Kinder geeignet
-                        - Ethno-Events
-
                     You **must** extract the category name from the user message.
-                    You **must** take only one most suitable category name from the category names above.
+                    You **must** take only one most suitable category name from the category names below:
+                    - Beauty & Lifestyle
+                    - Body & Clean
+                    - Bundles
+                    - Chinesische Rezepturen
+                    - Ethno Health Coach
+                    - Ethno-Events
+                    - Ethno-Hausapotheke
+                    - Ethno-Rezepturen
+                    - Ethno-Rezepturen, Für Kinder geeignet
+                    - Ethno-Testsatz
+                    - Für Kinder geeignet
+                    - Omega Go!
+                    - Omega-Öle & Vitalkomplex
+                    - Omega-Öle & Vitalkomplex, Für Kinder geeignet
+                    - Produktübersicht
+                    - Shape Classic, Shape Weight Management
+                    - Shape Weight Management
+                    - Tibetische Rezeptur Lung
+                    - Vitality & Family
+                    - Vorzugspaket TCR
 
                     Examples:
                     – Welche Produkte gibt es in der Kategorie Körper & Reinigung?
@@ -951,7 +813,29 @@ class Pipe:
                         "properties": {
                             "category": {
                                 "type": "string",
-                                "description": "Category",
+                                "description": "Category name extracted from user message",
+                                "enum": [
+                                    "Beauty & Lifestyle",
+                                    "Body & Clean",
+                                    "Bundles",
+                                    "Chinesische Rezepturen",
+                                    "Ethno Health Coach",
+                                    "Ethno-Events",
+                                    "Ethno-Hausapotheke",
+                                    "Ethno-Rezepturen",
+                                    "Ethno-Rezepturen, Für Kinder geeignet",
+                                    "Ethno-Testsatz",
+                                    "Für Kinder geeignet",
+                                    "Omega Go!",
+                                    "Omega-Öle & Vitalkomplex ",
+                                    "Omega-Öle & Vitalkomplex, Für Kinder geeignet",
+                                    "Produktübersicht",
+                                    "Shape Classic, Shape Weight Management",
+                                    "Shape Weight Management",
+                                    "Tibetische Rezeptur Lung",
+                                    "Vitality & Family",
+                                    "Vorzugspaket TCR",
+                                ],
                             }
                         },
                         "required": ["category"],
@@ -963,33 +847,49 @@ class Pipe:
                 "function": {
                     "name": "get_products_by_property",
                     "description": """
-                    Fetches a list of most relevant products for user request.
-                    Use it when no particular product is mentioned.
-                    Use it if the query applies to **many** products only.
+                    Fetches a list of the most relevant products for the user's request.
+
+                    Use it **ONLY** if the query applies to **many** products.
                     Use it if the 'Ethno Health' string is in the user message.
                     
-                    Product properties, which must be extracted from the user request:
-                    - ingredients
-                    - application area
-                    - target audience
-                    - user experience
-                    - recipe origin
-
                     You **must** extract product property from the user message.
-                    You **must** take only one most suitable property from the properties list above.
-                    You **must** extract the query **objective** from the user message. This must be one, 
-                    max two words, indicating the user search subject.
-                    You find objectives in the examples in the square brackets.
+                    You **must** take only one most suitable property from this list:
+                    - target audience
+                    - application area
+                    - ingredients
+                    - formulation origin
+                    - user experience
 
-                    Examples:
-                    - Welche Produkte sind am besten für [Sportler]?
-                    - Welche Produkte enthalten [Omega-Öle]?
+                    You **must** extract the query **objectives** from the user message. This must be one or 
+                    max two words, indicating the user's search subject.
+                    You find objectives in the square brackets in these examples:
+
+                    Property "target audience":
+                    - Welche Produkte sind am besten für [Sportler] geeignet?
+
+                    Property "ingredients":
+                    - Welche Produkte enthalten [Omega-3]?
+                    - Gibt es [Proteinpräparate]?
+                    - Bei welchen Produkten gibt's [Proteine]?
+
+                    Property "application area":
                     - Welches Produkt hilft bei [Allergien]?
                     - Welche Produkte sind wirksam gegen [Husten]?
                     - Was haben Sie gegen [Husten]?
-                    - Haben Sie Produkte für Klarheit und [Konzentration]?
-                    - Was sagen [Menschen] über Ethno Health Produkte?
+                    - Haben Sie Produkte für [Klarheit] und [Konzentration]?
+                    - Gibt es Produkte für die Unterstützung der [Darmgesundheit]?
+                    - Welche Produkte unterstützen beim Lernen?
+
+                    Property "formulation origin":
                     - Welche Produkte wurden in [Tibet] hergestellt?
+                    - Wo kommt das Produkt her?
+                    - [Woher] kommt die Rezeptur?
+                    - Was ist das Besondere an dieser [Rezeptur]?
+
+                    Property "user experience":
+                    - [Was sagen die Menschen] über Ethno Health Produkte?
+                    - [Was sagen die Leute] über die Produkte?
+                    - Gibt es [Erfolgstorys]?
 
                     """,
                     "parameters": {
@@ -1006,12 +906,16 @@ class Pipe:
                                     "user_experience",
                                 ],
                             },
-                            "objective": {
-                                "type": "string",
-                                "description": "Query objective extracted from user message.",
+                            "objectives": {
+                                "type": "array",
+                                "description": "Query objectives array extracted from user message.",
+                            },
+                            "user_message": {
+                                "type": "srring",
+                                "description": "User message",
                             },
                         },
-                        "required": ["property", "objective"],
+                        "required": ["property", "objectives", "user_message"],
                     },
                 },
             },
@@ -1023,186 +927,215 @@ class Pipe:
                     Queries the PostgreSQL database for detailed information about a product.
                     Use when the user refers to a specific product by name, but **there is no specific product property** in the request.
 
-                    Examples:
-                    – Was wissen Sie über das Lungenprodukt?
-                    – Welche Informationen gibt es über Brenner?
-                    – Was ist das Omega Go!-Produkt?
+                    You must extract the product name from the user message.
+                    You must take the most suitable name from these product names:
+                    - Algenkraft
+                    - Algenkraft
+                    - Alka Box
+                    - Astragalus 10
+                    - Augenkraft
+                    - Ayurveda Balance
+                    - Beauty Complex
+                    - Blutdruck-Komplex
+                    - Blutzucker-Komplex
+                    - Bupleurum 9
+                    - Burner
+                    - COLLAGEN Shots Refill (100 Stück)
+                    - Chili choco shake
+                    - Cholesterin-Komplex
+                    - Cythula 12
+                    - Daily 365
+                    - Darmkraft
+                    - Eiweiss-Vitalkomplex
+                    - Enzymkraft
+                    - Ethno Health Coach
+                    - Ethno-Hausapotheke
+                    - Ethno-Testsatz
+                    - Forsythiae 10
+                    - Frauenkraft
+                    - Gehirnkraft
+                    - Gelenkkraft
+                    - HS-Omega-3 Index-Selbsttest
+                    - Herzkraft
+                    - Immunkraft
+                    - Inflam-Komplex
+                    - Lebensfreude
+                    - Leberkraft
+                    - Lung - inkl. Präsentbox
+                    - Lungenkraft
+                    - MSM greens
+                    - Männerkraft
+                    - OPC-Kraft
+                    - Omega 3 orange
+                    - Omega 3 plus
+                    - Omega Duo
+                    - Omega Go!
+                    - Pilzkraft
+                    - Polygoni 7
+                    - Rehmannia 6
+                    - Schisandra 13
+                    - Shape Classic
+                    - Vorzugspaket TCR
+                    - Weidenkraft
+                    - Wurzel-Komplex
+                    - Zellschutz-Komplex
+                    - Ziziphus 9
+                    - alka duo
+                    - daily B-complex
+                    - daily zenergy
+                    - essence aminos
+                    - fresh vanilla shake
+                    - wild berry shake
+
+                    You find product names in the square brackets in these examples:
+                    – Was weisst du über das [Lung] Produkt?
+                    – Welche Informationen gibt es über [Brenner]?
+                    – Was ist das [Omega Go!] Produkt?
+                    - Was ist [Gehirnkraft]?
+
+                    DO NOT use this function if you can't extract the product name.
                     
                     """,
-                    "parameters": product_name_parameter,
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "product_name": {
+                                "type": "string",
+                                "description": "Product name extracted from the context",
+                                "enum": product_names,
+                            },
+                        },
+                        "required": ["product_name"],
+                    },
                 },
             },
             {
                 "type": "function",
                 "function": {
-                    "name": "get_disclaimer",
+                    "name": "get_product_property",
                     "description": """
-                    Queries the PostgreSQL Q&A database for the related disclaimer if the user asks questions about pregnancy, medicines, or other stuff, not directly connected to the product properties.
+                    Fetches the  product property relevant to the user's request.
+
+                    Use it **ONLY** if the query applies to the **single** product.
+                    You **must** extract the product property from the user message.
+                    You **must** take only the property from this list:
+                    - ingredients
+                    - application_area
+                    - target_audience
+                    - user experience
+                    - formulation_origin
+                    - intake_recommendation
+
+                    **DO NOT** use it if the extracted property is NOT in the list above!
+                    **DO NOT** use it if there is "Etho Health" substrin in the user query.
+                    
+                    Do not use it if the 'Ethno Health' string is in the user message.
+                    Extract the product name from the user message if given.
+
+                    User request examples:
+                    - Was ist da drin?
+                    - Welche Inhaltsstoffe hat das Produkt
+                    - Welche Zutaten hat das Produkt
+                    - Für was ist das Produkt gut?
+                    - Kann das Lung gegen Konzentrastionsstörungen helfen?
+                    - Für wen ist das Produkt gedacht?
+                    - Was sagen die Leüte über das produkt?
+                    - Welche Erfolgsgeschichten gibt's bei daily zenergy?
+                    - Wie ist das Produkt entstanden?
+                    - Wer hat das Produkt erfunden?
+                    - Wie soll ich das Produkt einnehmen?
+                    - Wie verwendet man das Lung produkt?
+
+                    """,
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "property": {
+                                "type": "string",
+                                "description": "Product property extracted from user message",
+                                "enum": [
+                                    "target_audience",
+                                    "application_area",
+                                    "ingredients",
+                                    "formulation_origin",
+                                    "user_experience",
+                                    "intake_recommendation",
+                                ],
+                            },
+                            "product_name": {
+                                "type": "string",
+                                "description": "Product name extracted from the context",
+                                "enum": product_names,
+                            },
+                        },
+                        "required": ["property"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_qna_answer",
+                    "description": """
+                    Queries the PostgreSQL Q&A database for the related answer to questions **not directly** connected to the product properties.
+
+                    **DO NOT** use it when the user message contains references to the product properties:
+                    - ingredients
+                    - application_area
+                    - target_audience
+                    - user experience
+                    - formulation_origin
+                    - intake_recommendation
+
+                    Use it when the user asks about:
+                    - Etho Health
+                    - Mentora
+                    - Einnahme von Medikamenten
+                    - Schwangerschaft
+                    - Stillzeit
+                    - Kontraindikationen
+                    - Nebenwirkungen
+                    - Krebs Diagnose
+                    - Gesundheit
+                    - Produktqualität
+                    - Qualitätsmerkmale
+                    - Produktkombinationen
+                    - Kombination
+                    - Produktverträglichkeit
+                    - Produktvergleich
+                    - Produktunterschiede
+                    - Produktlagerung
+                    - Produktwirksamkeit
+                    - Tägliche Anwendung von Produkten
+                    - Mentor, Berater, Coach          
 
                     Examples:
+                    - Darf das Produkt bei Einnahme von Medikamenten eingenommen werden?
+                    - Darf ich das Produkt nutzen, wenn ich andere Medikamenten einnehme?
+                    - Kann ich das produkt während der Schwangerschaft konsumieren?
+                    - Gibt es Kontraindikationen bei der Einnahme vom Produkt?
                     - Wie wirken sich essence aminos auf die Haut während der Schwangerschaft aus?
                     - Kann ich das Produkt während der Schwangerschaft einnehmen?
                     - Können schwangere Frauen Ethno Health-Produkte verwenden?
                     - Kann das Produkt während der Einnahme von Medikamenten eingenommen werden?
                     - Darf ich das Produkt verwenden, wenn ich andere Medikamente einnehme?
-                    - Gibt es Kontraindikationen für die Einnahme des Produkts?
-                    
+                    - Ist das Produkt vegan und welche Qualitätsmerkmale werden genannt?
+                    - Was macht die hochwertigen, natürlichen Inhaltsstoffe von Ethno Health so besonders wirksam für das tägliche Wohlbefinden?
+                    - Inwiefern profitieren Vegetarier und Veganer von der umfassenden Produktpalette, die Ethno Health anbietet?
+                    - Mit welchen Routinen lässt sich Lung gut kombinieren?
+                    - Welche Produkte lassen sich gut mit Lung kombinieren?
+                    - Was ist Mentora?
                     """,
-                    "parameters": user_message_parameter,
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_general_info",
-                    "description": """Queries the PostgreSQL Q&A database for the related information.
-                    Use it if the user asks general questions about the **Ethno Health** products, 
-                    quality, brand, traditional knowledge, research, nutrition, sustainable nutrition, 
-                    vegan products, natural ingredients, immune system support, vitality boost,
-                    traditional medicine, modern science, well-being, plant-based nutrients,
-                    not directly connected to the product properties.
-                    
-                    Use it if the 'Ethno Health' string is in the user message,
-                    but the question is not about product properties:
-                    - ingredients
-                    - application area
-                    - target audience
-                    - user experience
-                    - recipe origin
-                    
-                    Examples:
-                    - Ich habe gehört, dass Nahrungsergänzungsmittel manchmal kritisch gesehen werden. Was macht die Produkte von Ethno Health so besonders?
-                    - Sind die Produkte von Ethno Health für Vegetarier und Veganer geeignet?
-                    - Wie profitieren Vegetarier und Veganer von der umfassenden Produktpalette von Ethno Health?
-                    - Wie fördert Ethno Health die Nachhaltigkeit bei der Beschaffung seiner Zutaten?
-                    - Welche Qualitätsstandards erfüllt Ethno Health bei der Herstellung seiner Produkte?
-                    - Wie unterstützt Ethno Health die Gesundheit?
-                    - Wie unterstützt Ethno Health die Nachhaltigkeit bei der Beschaffung seiner Zutaten?
-                    
-                    """,
-                    "parameters": user_message_parameter,
-                },
-            },
-            ### Produkt props
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_user_experience",
-                    "description": """
-                    Queries the PostgreSQL database for the user feedback, usage, and user experience for the product with the given name.
-                    Use it when the user asks questions about usage, experience, and stories of the single product usage.
-                    Use it if the query applies to a single product only.
-
-                    **DO NOT USE** if the user message contains "Ethno Health".
-                    
-                    Examples:
-                    – Was sagen die Leute über das Produkt?
-                    – Gibt es Anwenderberichte zur Anwendung und den Ergebnissen?
-                    – Wie bewerten die Nutzer das Produkt?
-                    – Gibt es Meinungen von Nutzern zum Produkt?
-
-                    """,
-                    "parameters": product_name_parameter,
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_product_ingredients",
-                    "description": """
-                    Queries the PostgreSQL database for the particular product ingredients.
-                    **DO NOT** use the tool if the user message contains "Ethno Health" name.
-
-                    Examples:
-                    - Welche Inhaltsstoffe enthält das Produkt?
-                    - Was ist drin?
-                    
-                    """,
-                    "parameters": opt_product_name_parameter,
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_product_application_area",
-                    "description": """
-                    Queries the PostgreSQL database for the particular product application area.
-                    **DO NOT** use the tool if the user message contains "Ethno Health" name.
-
-                    Examples:
-                    - Wie wirkt das produkt?
-                    - Wofür ist dieses Produkt geeignet?
-                    - Ist das Produkt zum Abnehmen geeignet?
-                    - Kann dieses Produkt die Konzentration verbessern?
-                    
-                    """,
-                    "parameters": opt_product_name_parameter,
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_intake_recommendation",
-                    "description": """
-                    Queries the PostgreSQL database for the particular product intake recommendations.
-                    **DO NOT** use the tool if the user message contains "Ethno Health" name.
-
-                    Examples:
-                    - Wie oft sollte ich das Produkt einnehmen?
-                    - Wie viel sollte ich pro Tag einnehmen?
-                    - Gibt es Dosierungsempfehlungen für das Produkt?
-
-                    """,
-                    "parameters": opt_product_name_parameter,
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_target_audience",
-                    "description": """
-                    Queries the PostgreSQL database for the particular product target people group and matching audience.
-                    **DO NOT** use the tool if the user message contains "Ethno Health" name.
-
-                    Examples:
-                    – Für wen ist das Produkt am besten geeignet?
-                    – Für welche Personen ist es geeignet?
-                    – Für welche Zielgruppen ist es empfehlenswert?
-                    
-                    """,
-                    "parameters": opt_product_name_parameter,
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_formulation_origin",
-                    "description": """
-                    Queries the PostgreSQL database for the particular product recipe or formulation origin.
-                    **DO NOT** use the tool if the user message contains "Ethno Health" name.
-
-                    Examples:
-                    - Wie ist das Produkt entstanden?
-                    - Wer hat das Rezept erfunden?
-                    
-                    """,
-                    "parameters": opt_product_name_parameter,
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_product_history",
-                    "description": """
-                    Queries the PostgreSQL database for the history of the particular product creation, its author, country, circumstances, origin, or invention.
-                    **DO NOT** use the tool if the user message contains "Ethno Health" name.
-        
-                    Examples:
-                    - Woher stammt das Produkt?
-                    - Erzählen Sie mir die Produktgeschichte.
-                    
-                    """,
-                    "parameters": opt_product_name_parameter,
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "user_message": {
+                                "type": "string",
+                                "description": "User message",
+                            }
+                        },
+                        "required": ["user_message"],
+                    },
                 },
             },
         ]
@@ -1210,12 +1143,12 @@ class Pipe:
         # print(f"--> tools_schema:\n{tools_schema}")
         system_prompt_tools = (
                 """
-    You are a product assistant.
-    Respond *only* with valid JSON, no explanations.
-    
-    You have access to the following tools:
-    
-    """
+        You are a product assistant.
+        Respond *only* with valid JSON, no explanations.
+        
+        You have access to the following tools:
+        
+        """
                 + json.dumps(tools_schema)
                 + """
 
@@ -1231,9 +1164,10 @@ USE *EXACTLY* THIS SCHEMA:
 Here are acceptable examples:
 
 {"name":"get_product_list","arguments":{}}
-{"name":"get_products_by_property", "arguments":{"property": "user_experience", "user_message": "Do you have success stories for Products?"}}
+{"name":"get_products_by_property", "arguments":{"property": "target_audience", "objectives": ["Sportler"], "user_message": "Für wen ist das Produkt gut?"}
 {"name":"get_product_details","arguments":{"product_name":"Lung"}}
-{"name":"get_product_ingredients","arguments":{}}
+{"name":"get_product_property","arguments":{"property": "ingredients"}}
+{"name":"get_product_property","arguments":{"property": "target_audience", "product_name": "Burner"}}
 {"name":"get_disclaimer","arguments":{}}
 
 Begin your response now in this JSON-only format.
@@ -1251,37 +1185,18 @@ Begin your response now in this JSON-only format.
             },
         ]
 
-        start_time = time.perf_counter()
-
-        """
-        response = self.ollama.chat(
-            model=self.valves.TOOLS_MODEL_ID,
-            messages=messages,
-            tools=tools,
-            format="json",
-            options={
-                "num_ctx": 4096,
-                "top_k": 1,
-                "top_p": 0.7,
-                "temperature": 0,
-            },
-        )
-        """
         openai = OpenAI(
             base_url=self.valves.OPENAI_API_BASE_URL,
             api_key=self.valves.OPENAI_API_KEY,
         )
 
-        response = openai.chat.completions.create(
+        start_time = time.perf_counter()
+
+        response = self.openai.chat.completions.create(
             model=self.valves.TOOLS_MODEL_ID,
             messages=messages,
             stream=False,
-            # tools=(
-            #   tools_schema
-            # tools_schema if re.search(r"gpt", self.valves.TOOLS_MODEL_ID) else None
-            # ),
             temperature=0,
-            # tool_choice="auto",
         )
 
         # print(f"-----> response: {response}")
@@ -1376,17 +1291,29 @@ Begin your response now in this JSON-only format.
         print("================================================")
 
         if result:
+            prompt = {result.get("prompt", "")}
+            context = f"Context: \n\n{result.get('data', '')}\n\n"
+
             print(f"Function call result: {result.get('data', '')}")
             print("================================================")
+        else:
+            prompt = self.valves.PROMPT_NOTHING_FOUND
+            context = ""
 
         messages = [
             {
                 "role": "system",
-                "content": f"""{system_message}\n\n{result.get('prompt', '')}\n\nUsername: {username}\n\nContext:\n\n{result.get('data', '')}\n\n""",
+                "content": f"""                
+                Username: {username}                
+                
+                {system_message}
+                
+                {prompt}
+                """,
             },
             {
                 "role": "user",
-                "content": f"/no_think {user_message}",
+                "content": f"{context}\n{user_message}",
             },
         ]
 
@@ -1400,13 +1327,14 @@ Begin your response now in this JSON-only format.
             print(f"- Model: {self.valves.RAG_MODEL_ID}")
             print("------------------------------------------------")
 
-            for chunk in openai.chat.completions.create(
+            for chunk in self.openai.chat.completions.create(
                     model=self.valves.RAG_MODEL_ID,
                     messages=messages,
                     stream=True,
-                    max_tokens=8192,
+                    max_tokens=16384,
                     temperature=body.get("temperature", 0),
-                    top_p=body.get("top_p", 0.9),
+                    top_p=body.get("top_p", 0.3),
+                    extra_body={"top_k": 5},
             ):
                 # print(f"---> chunk: {chunk}")
                 if first_chunk:
@@ -1430,7 +1358,6 @@ Begin your response now in this JSON-only format.
                 yield response
 
             yield self.valves.TEMPLATE_FOOTER
-            # yield "\n\n---\n\n*Bitte beachte, dass **alle** Produkte nicht zur Heilung oder Behandlung von Krankheiten dienen!*\n\n"
 
             end_time = time.perf_counter()
             duration = end_time - start_time

@@ -137,7 +137,6 @@ def save_qna_to_vector_db(
         VECTOR_DB_CLIENT.insert_qna(
             QNASchema(
                 id=id,
-                scope=data["scope"],
                 question_text=data["question"],
                 answer_text=data["answer"],
                 hint=data["hint"],

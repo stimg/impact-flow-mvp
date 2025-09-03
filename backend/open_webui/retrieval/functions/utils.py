@@ -22,25 +22,13 @@ def get_user_name_from_full_name(self, username: str | None) -> str:
     match = re.match(name_regex, username or "")
     return match.group(1) if match else ""
 
-def get_embedding(self, text=""):
-    # Return zero vector on empty text
-    if not text:
-        return [] * 1024
-
-    response = self.embedding.embeddings.create(
-        model=self.valves.EMBEDDING_MODEL_ID,
-        input=text,
-    )
-
-    return response.data[0].embedding
-
 def sanitize_user_input(text: str, strict: bool = True) -> str:
     clean = text
     re_html_tags        = re.compile(r"</?[^>]+(?:>|$)")
     re_md_link_or_image = re.compile(r"!?\[([^\]]*?)\]\([^)]+?\)")
-    re_md_inline_fmt    = re.compile(r"[*_~`>#-]+")
+    re_md_inline_fmt    = re.compile(r"[*_~`>#]+")
     re_unescape_bslash  = re.compile(r"\\([\\`*_{[}()\#+\-.!])")
-    re_control_chars    = re.compile(r"[^\x20-\x7E\n\r\t]+")
+    re_control_chars = re.compile(r"[\u0000-\u001F\u007F-\u009F]")
     re_space_before_nl  = re.compile(r"\s+\n")
 
     # Strict Mode Regex: erlaubt nur Buchstaben, Ziffern, Satzzeichen, Whitespace
@@ -74,6 +62,18 @@ def sanitize_user_input(text: str, strict: bool = True) -> str:
         clean = re_strict.sub("", clean)
 
     return clean
+
+def get_embedding(self, text=""):
+    # Return zero vector on empty text
+    if not text:
+        return [] * 1024
+
+    response = self.embedding.embeddings.create(
+        model=self.valves.EMBEDDING_MODEL_ID,
+        input=text,
+    )
+
+    return response.data[0].embedding
 
 def generate_embedding(self, text):
     # Return zero vector on empty text
