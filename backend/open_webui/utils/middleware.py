@@ -1096,6 +1096,7 @@ async def process_chat_response(
                                 }
                             )
                         except Exception as e:
+                            print(f"Exception: {e}")
                             pass
 
                 if TASKS.TITLE_GENERATION in tasks:

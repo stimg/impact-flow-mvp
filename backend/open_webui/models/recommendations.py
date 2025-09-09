@@ -23,12 +23,11 @@ class RecommendationModel(BaseModel):
     hint: str
 
 # We also can handle not only one tag but also CSV string with tags
-def get_recommendation_by_embedding(tags: str) -> Dict[str, str] or None:
+def get_recommendation_by_tag(tag: str) -> Dict[str, str] or None:
     with get_db() as db:
         recommendation = (
-            db.query(RecommendationSchema,
-                     func.similarity(RecommendationSchema.tags_search, tags).label("score"))
-            .order_by(func.similarity(RecommendationSchema.tags_search, tags).desc())
+            db.query(RecommendationSchema)
+            .order_by(func.similarity(RecommendationSchema.tags_search, tag).desc())
             .limit(1)
             .first()
         )

@@ -1439,7 +1439,8 @@ FOLLOW_UP_GENERATION_PROMPT_TEMPLATE = PersistentConfig(
     os.environ.get("FOLLOW_UP_GENERATION_PROMPT_TEMPLATE", ""),
 )
 
-DEFAULT_FOLLOW_UP_GENERATION_PROMPT_TEMPLATE = """### Task:
+DEFAULT_FOLLOW_UP_GENERATION_PROMPT_TEMPLATE = """
+### Task:
 Suggest 3-5 relevant follow-up questions or prompts that the user might naturally ask next in this conversation as a **user**, based on the chat history, to help continue or deepen the discussion.
 ### Guidelines:
 - Write all follow-up questions from the user’s point of view, directed to the assistant.

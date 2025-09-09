@@ -30,7 +30,7 @@ from open_webui.models.recommendations import ProcessRecommendationForm
 from open_webui.retrieval.vector.dbs.pgvector import RecommendationSchema
 from open_webui.retrieval.functions.utils import (get_embeddings)
 
-from open_webui.models.recommendations import get_recommendation_by_embedding
+from open_webui.models.recommendations import get_recommendation_by_tag
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MODELS"])
@@ -40,9 +40,9 @@ router = APIRouter()
 
 
 @router.get("/", response_model=Optional[RecommendationModel])
-def find_by_tag(request: Request, tag: str, user=Depends(get_verified_user)):
+def find_by_tag(tag: str, user=Depends(get_verified_user)):
     print("Tag:", tag)
-    rec = get_recommendation_by_embedding(tag) if tag else None
+    rec = get_recommendation_by_tag(tag) if tag else None
 
     if rec and user.role == "admin":
         print("Found recommendation:", rec)

@@ -147,6 +147,8 @@ type Settings = {
 	splitLargeDeltas?: boolean;
 	chatDirection: 'LTR' | 'RTL' | 'auto';
 	ctrlEnterToSend?: boolean;
+	autoTags?: boolean;
+	autoFollowUps?: boolean;
 
 	system?: string;
 	seed?: number;

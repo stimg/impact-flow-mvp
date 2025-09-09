@@ -300,6 +300,7 @@ async def generate_follow_ups(
 
     payload = {
         "model": task_model_id,
+        "chat_model_id": model_id,
         "messages": [{"role": "user", "content": content}],
         "stream": False,
         "metadata": {

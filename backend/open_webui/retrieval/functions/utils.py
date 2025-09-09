@@ -3,6 +3,7 @@ import re
 import html
 import psycopg2
 import requests
+import random
 from fastapi import (
     Depends,
     Request,
@@ -12,6 +13,8 @@ from open_webui.retrieval.utils import get_embedding_function
 from open_webui.utils.auth import get_verified_user
 from psycopg2.extras import RealDictCursor
 from sqlalchemy import text
+
+from open_webui.retrieval.functions.data import questions
 
 
 def get_user_name_from_full_name(self, username: str | None) -> str:
@@ -26,7 +29,7 @@ def sanitize_user_input(text: str, strict: bool = True) -> str:
     clean = text
     re_html_tags        = re.compile(r"</?[^>]+(?:>|$)")
     re_md_link_or_image = re.compile(r"!?\[([^\]]*?)\]\([^)]+?\)")
-    re_md_inline_fmt    = re.compile(r"[*_~`>#]+")
+    re_md_inline_fmt    = re.compile(r"[*~`>#]+")
     re_unescape_bslash  = re.compile(r"\\([\\`*_{[}()\#+\-.!])")
     re_control_chars = re.compile(r"[\u0000-\u001F\u007F-\u009F]")
     re_space_before_nl  = re.compile(r"\s+\n")
@@ -46,7 +49,7 @@ def sanitize_user_input(text: str, strict: bool = True) -> str:
     clean = re_md_inline_fmt.sub("", clean)
 
     # 4) Backslashes vor Sonderzeichen auflösen
-    clean = re_unescape_bslash.sub(r"\1", clean)
+    # clean = re_unescape_bslash.sub(r"\1", clean)
 
     # 5) HTML-Entities dekodieren
     clean = html.unescape(clean)
@@ -193,3 +196,24 @@ def get_id_by_embedding(vec: List[float], col: str) -> str:
             """), {"col": col, "vec": f"{vec}"}).first()
 
         return str(uuid_tuple[0])
+
+def get_follow_ups(model: str, count=3):
+    model_map = {
+        "empfehlungsregister_agent": "recommendations",
+        "agent_openai": "chat",
+        "mentora": "chat",
+    }
+    topic = model_map.get(model, "")
+    if not topic in questions:
+        return []
+
+    question_set = questions[topic]
+    qn = len(question_set)
+
+    if qn < count:
+        return []
+
+    # Generate random questions using list comprehension
+    follow_ups = [question_set[random.randrange(qn)] for _ in range(count)]
+
+    return follow_ups

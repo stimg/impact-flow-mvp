@@ -15,7 +15,11 @@ from open_webui.retrieval.functions.utils import (
     get_embedding,
     sanitize_user_input,
 )
-from open_webui.retrieval.functions.data import product_names
+from open_webui.retrieval.functions.data import (
+    product_names,
+    product_properties,
+    categories,
+)
 
 
 class Pipe:
@@ -104,6 +108,7 @@ class Pipe:
             Das produkt ist speziell für Sportler entwickelt. Es hilft dabei, die Energie im Alltag 
             zu steigern und den sportlichen Leistungsgrad zu verbessern.
 
+            **REMEMBER: Render all 3 products from the context, in the same order.**
             """,
             description="System prompt for product list.",
         )
@@ -135,20 +140,17 @@ class Pipe:
                   1. Product name as the Markdown link.
                   2. On the same line, the em dash (–) surrounded by spaces.
                   3. On the same line, product categories are always in cursive (*italic*).
-                  4. Tags, always in cursive (*italic*)
-                  5. Product description.
-                  6. Target audience.
-                  7. Application area.
-                  8. Advantages: Highlight the key benefits that set the product apart from others and explain the added value for users.
-                  9. New section with "---".
-                  10. Mentora pro hint (can be empty). DO NOT invent, alter, assume, or extend beyond the context. If the context does not contain a hint, explicitly state: "kein Tipp".
+                  4. Product description.
+                  5. Target audience.
+                  6. Application area.
+                  7. Advantages: Highlight the key benefits that set the product apart from others and explain the added value for users.
+                  8. New section with "---".
+                  9. Mentora pro hint (can be empty). DO NOT invent, alter, assume, or extend beyond the context. If the context does not contain a hint, explicitly state: "kein Tipp".
 
                 - Always render section names in bold.
                 - For the "Mentora Pro Tipp" section, always render "Mentora Pro Tipp 💡:" section name before the content.
                 - Always render product details exactly as in this example:
                 [Energy-Plus](https://www.ethno-health.com/energy-plus) – *Sport & Vitaliy*
-                
-                **Schlagworte:** *Sport*
                 
                 **Produktbeschreibung:** Steigert die Energie im Alltag.
                 
@@ -388,6 +390,11 @@ class Pipe:
         For example, it searches for all available products in the category or database.
         """
 
+        print(f"---> get_products_by_property")
+        print(f"---> property: {property}")
+        print(f"---> objectives: {objectives}")
+        print(f"---> user_message: {user_message}")
+
         # Change search to tags instead of application area for better results
         if property == "xxx_application_area":
             query = """
@@ -451,13 +458,13 @@ class Pipe:
                                     WHEN 'name' THEN regexp_replace(vmetadata->>'name', '^\\s*Produktname:\\s*', '')
                                     WHEN 'categories' THEN regexp_replace(chunk_text, '^\\s*Kategorien:\\s*', '')
                                     WHEN 'reference_link' THEN regexp_replace(chunk_text, '^\\s*Produk(t?)webseite:\\s*', '')
-                                    -- WHEN 'application_area' THEN regexp_replace(chunk_text, '^\\s*Anwendungsbereich:\\s*', '')
+                                    WHEN 'application_area' THEN regexp_replace(chunk_text, '^\\s*Anwendungsbereich:\\s*', '')
                                     WHEN 'tags' THEN regexp_replace(chunk_text, '^\\s*Schlagworte:\\s*', '')
                                     END
                         ) AS info
                     FROM product_chunks pc
                              JOIN top USING (product_id)
-                    WHERE pc.section IN ('name', 'tags', 'categories', 'reference_link')
+                    WHERE pc.section IN ('name', 'tags', 'categories', 'application_area', 'reference_link')
                     GROUP BY pc.product_id
                     ORDER BY (SELECT match_count FROM scored s WHERE s.product_id = pc.product_id) DESC; \
                     """
@@ -485,7 +492,9 @@ class Pipe:
                     """
 
             # vector = self.get_embedding(" ".join(objectives))
-            vector = self.get_embedding(user_message)
+            vector = self.get_embedding(
+                user_message or objectives or "EMPTY_QUERY_SENTINEL"
+            )
             params = (property, vector, vector, property)
 
         results = self.query_db(query, "all", params)
@@ -523,11 +532,7 @@ class Pipe:
                 SELECT
                     jsonb_object_agg(
                             section,
-                            CASE section
-                                WHEN 'name' THEN regexp_replace(chunk_text, '^\\s*Produktname:\\s*', '', 'i')
-                                WHEN 'reference_link' THEN regexp_replace(chunk_text, '^\\s*Produk(t?)webseite:\\s*', '', 'i')
-                                ELSE chunk_text
-                                END
+                            chunk_text
                     )
                 FROM product_chunks
                 WHERE product_id IN (
@@ -542,13 +547,13 @@ class Pipe:
                                   'name',
                                   'reference_link',
                                   'categories',
-                                  'tags',
                                   'target_audience',
                                   'short_description',
                                   'product_details',
                                   'intake_recommendation',
                                   'application_area',
-                                  'ingredients'
+                                  'ingredients',
+                                  'hint'
                     ) \
                 """
 
@@ -608,7 +613,7 @@ class Pipe:
                                      WHERE section = 'name'
                                      ORDER BY embedding <#> %s::vector
                                      LIMIT 1)
-                  AND section in ('name', 'categories', %s, 'reference_link') \
+                  AND section in ('name', 'categories', %s, 'hint', 'reference_link') \
                 """
 
         result = self.query_db(query, "val", (vector_name, property))
@@ -704,7 +709,7 @@ class Pipe:
                 assistant_message = message.get("content", "")
                 # print(f"\n-----> Assistant message: {assistant_message}\n\n")
 
-                pattern = r"\[([äöüßÄÖÜa-zA-Z0-9\s\-!]+)\]\((https://[^\s)]+)\)"
+                pattern = r"\[([äöüßÄÖÜa-zA-Z0-9\s\-\.!]+)\]\((https://[^\s)]+)\)"
                 name = None
                 url = None
 
@@ -725,11 +730,11 @@ class Pipe:
 
             elif message.get("role", "") == "user":
                 user_message = message.get("content", "")
-                user_message = (
-                    sanitize_user_input(user_message)
-                    if user_message
-                    else "EMPTY_QUERY_SENTINEL"
-                )
+                # user_message = (
+                #     sanitize_user_input(user_message)
+                #   if user_message
+                #   else "EMPTY_QUERY_SENTINEL"
+                # )
                 # print(f"-----> User message: {user_message}")
 
         # Define variables for LLM
@@ -776,31 +781,11 @@ class Pipe:
                 "type": "function",
                 "function": {
                     "name": "get_products_by_category",
-                    "description": """
+                    "description": f"""
                     Fetches a list of products in the category.
                     
                     You **must** extract the category name from the user message.
-                    You **must** take only one most suitable category name from the category names below:
-                    - Beauty & Lifestyle
-                    - Body & Clean
-                    - Bundles
-                    - Chinesische Rezepturen
-                    - Ethno Health Coach
-                    - Ethno-Events
-                    - Ethno-Hausapotheke
-                    - Ethno-Rezepturen
-                    - Ethno-Rezepturen, Für Kinder geeignet
-                    - Ethno-Testsatz
-                    - Für Kinder geeignet
-                    - Omega Go!
-                    - Omega-Öle & Vitalkomplex
-                    - Omega-Öle & Vitalkomplex, Für Kinder geeignet
-                    - Produktübersicht
-                    - Shape Classic, Shape Weight Management
-                    - Shape Weight Management
-                    - Tibetische Rezeptur Lung
-                    - Vitality & Family
-                    - Vorzugspaket TCR
+                    You **must** take only one most suitable category name from this list: {', '.join(categories)}
 
                     Examples:
                     – Welche Produkte gibt es in der Kategorie Körper & Reinigung?
@@ -814,28 +799,7 @@ class Pipe:
                             "category": {
                                 "type": "string",
                                 "description": "Category name extracted from user message",
-                                "enum": [
-                                    "Beauty & Lifestyle",
-                                    "Body & Clean",
-                                    "Bundles",
-                                    "Chinesische Rezepturen",
-                                    "Ethno Health Coach",
-                                    "Ethno-Events",
-                                    "Ethno-Hausapotheke",
-                                    "Ethno-Rezepturen",
-                                    "Ethno-Rezepturen, Für Kinder geeignet",
-                                    "Ethno-Testsatz",
-                                    "Für Kinder geeignet",
-                                    "Omega Go!",
-                                    "Omega-Öle & Vitalkomplex ",
-                                    "Omega-Öle & Vitalkomplex, Für Kinder geeignet",
-                                    "Produktübersicht",
-                                    "Shape Classic, Shape Weight Management",
-                                    "Shape Weight Management",
-                                    "Tibetische Rezeptur Lung",
-                                    "Vitality & Family",
-                                    "Vorzugspaket TCR",
-                                ],
+                                "enum": categories,
                             }
                         },
                         "required": ["category"],
@@ -846,19 +810,14 @@ class Pipe:
                 "type": "function",
                 "function": {
                     "name": "get_products_by_property",
-                    "description": """
+                    "description": f"""
                     Fetches a list of the most relevant products for the user's request.
 
                     Use it **ONLY** if the query applies to **many** products.
                     Use it if the 'Ethno Health' string is in the user message.
                     
                     You **must** extract product property from the user message.
-                    You **must** take only one most suitable property from this list:
-                    - target audience
-                    - application area
-                    - ingredients
-                    - formulation origin
-                    - user experience
+                    You **must** take only one most suitable property from this list: {'; '.join(product_properties)}
 
                     You **must** extract the query **objectives** from the user message. This must be one or 
                     max two words, indicating the user's search subject.
@@ -875,14 +834,14 @@ class Pipe:
                     Property "application area":
                     - Welches Produkt hilft bei [Allergien]?
                     - Welche Produkte sind wirksam gegen [Husten]?
-                    - Was haben Sie gegen [Husten]?
+                    - Was haben Sie gegen [Durchfall]?
                     - Haben Sie Produkte für [Klarheit] und [Konzentration]?
                     - Gibt es Produkte für die Unterstützung der [Darmgesundheit]?
-                    - Welche Produkte unterstützen beim Lernen?
+                    - Welche Produkte unterstützen beim [Lernen]?
 
                     Property "formulation origin":
                     - Welche Produkte wurden in [Tibet] hergestellt?
-                    - Wo kommt das Produkt her?
+                    - [Wo] kommt das Produkt [her]?
                     - [Woher] kommt die Rezeptur?
                     - Was ist das Besondere an dieser [Rezeptur]?
 
@@ -898,13 +857,7 @@ class Pipe:
                             "property": {
                                 "type": "string",
                                 "description": "Product property extracted from user message",
-                                "enum": [
-                                    "target_audience",
-                                    "application_area",
-                                    "ingredients",
-                                    "formulation_origin",
-                                    "user_experience",
-                                ],
+                                "enum": product_properties,
                             },
                             "objectives": {
                                 "type": "array",
@@ -923,69 +876,12 @@ class Pipe:
                 "type": "function",
                 "function": {
                     "name": "get_product_details",
-                    "description": """
+                    "description": f"""
                     Queries the PostgreSQL database for detailed information about a product.
                     Use when the user refers to a specific product by name, but **there is no specific product property** in the request.
 
                     You must extract the product name from the user message.
-                    You must take the most suitable name from these product names:
-                    - Algenkraft
-                    - Algenkraft
-                    - Alka Box
-                    - Astragalus 10
-                    - Augenkraft
-                    - Ayurveda Balance
-                    - Beauty Complex
-                    - Blutdruck-Komplex
-                    - Blutzucker-Komplex
-                    - Bupleurum 9
-                    - Burner
-                    - COLLAGEN Shots Refill (100 Stück)
-                    - Chili choco shake
-                    - Cholesterin-Komplex
-                    - Cythula 12
-                    - Daily 365
-                    - Darmkraft
-                    - Eiweiss-Vitalkomplex
-                    - Enzymkraft
-                    - Ethno Health Coach
-                    - Ethno-Hausapotheke
-                    - Ethno-Testsatz
-                    - Forsythiae 10
-                    - Frauenkraft
-                    - Gehirnkraft
-                    - Gelenkkraft
-                    - HS-Omega-3 Index-Selbsttest
-                    - Herzkraft
-                    - Immunkraft
-                    - Inflam-Komplex
-                    - Lebensfreude
-                    - Leberkraft
-                    - Lung - inkl. Präsentbox
-                    - Lungenkraft
-                    - MSM greens
-                    - Männerkraft
-                    - OPC-Kraft
-                    - Omega 3 orange
-                    - Omega 3 plus
-                    - Omega Duo
-                    - Omega Go!
-                    - Pilzkraft
-                    - Polygoni 7
-                    - Rehmannia 6
-                    - Schisandra 13
-                    - Shape Classic
-                    - Vorzugspaket TCR
-                    - Weidenkraft
-                    - Wurzel-Komplex
-                    - Zellschutz-Komplex
-                    - Ziziphus 9
-                    - alka duo
-                    - daily B-complex
-                    - daily zenergy
-                    - essence aminos
-                    - fresh vanilla shake
-                    - wild berry shake
+                    You must take the most suitable name from this list: {', '.join(product_names)}
 
                     You find product names in the square brackets in these examples:
                     – Was weisst du über das [Lung] Produkt?
@@ -1013,18 +909,12 @@ class Pipe:
                 "type": "function",
                 "function": {
                     "name": "get_product_property",
-                    "description": """
+                    "description": f"""
                     Fetches the  product property relevant to the user's request.
 
                     Use it **ONLY** if the query applies to the **single** product.
                     You **must** extract the product property from the user message.
-                    You **must** take only the property from this list:
-                    - ingredients
-                    - application_area
-                    - target_audience
-                    - user experience
-                    - formulation_origin
-                    - intake_recommendation
+                    You **must** take only the property from this list: {', '.join(product_properties)}
 
                     **DO NOT** use it if the extracted property is NOT in the list above!
                     **DO NOT** use it if there is "Etho Health" substrin in the user query.
@@ -1053,14 +943,7 @@ class Pipe:
                             "property": {
                                 "type": "string",
                                 "description": "Product property extracted from user message",
-                                "enum": [
-                                    "target_audience",
-                                    "application_area",
-                                    "ingredients",
-                                    "formulation_origin",
-                                    "user_experience",
-                                    "intake_recommendation",
-                                ],
+                                "enum": product_properties,
                             },
                             "product_name": {
                                 "type": "string",
@@ -1076,16 +959,11 @@ class Pipe:
                 "type": "function",
                 "function": {
                     "name": "get_qna_answer",
-                    "description": """
+                    "description": f"""
                     Queries the PostgreSQL Q&A database for the related answer to questions **not directly** connected to the product properties.
 
-                    **DO NOT** use it when the user message contains references to the product properties:
-                    - ingredients
-                    - application_area
-                    - target_audience
-                    - user experience
-                    - formulation_origin
-                    - intake_recommendation
+                    **DO NOT** use it when the user message contains references to the product properties from this list:
+                    {', '.join(product_properties)}
 
                     Use it when the user asks about:
                     - Etho Health
@@ -1199,8 +1077,6 @@ Begin your response now in this JSON-only format.
             temperature=0,
         )
 
-        # print(f"-----> response: {response}")
-
         end_time = time.perf_counter()
         duration = end_time - start_time
 
@@ -1208,6 +1084,7 @@ Begin your response now in this JSON-only format.
         print("------------ Tool search query -----------------")
         print(f"- User: {__user__['name']}")
         print(f"- Model: {response.model}")
+        print(f"- User message: {user_message}")
         print("------------------------------------------------")
 
         ### Statistic
@@ -1224,7 +1101,7 @@ Begin your response now in this JSON-only format.
             print(f"- Prompt tokens: {response.usage.prompt_tokens}")
             print(f"- Total tokens: {response.usage.total_tokens}")
 
-        # print(f"Function search response: {response}")
+        print(f"Function search response: {response}")
 
         function_name = ""
         arguments = {}
@@ -1263,43 +1140,42 @@ Begin your response now in this JSON-only format.
                         arguments = value["arguments"]
                         break
 
-        db_query_start = time.perf_counter()
-
-        try:
-            if (
-                    hasattr(arguments, "product_name")
-                    and arguments["product_name"] == "Ethno Health"
-            ):
-                result = handlers["get_general_info"](user_message)
-            else:
-                if function_name in handlers:
-                    result = handlers[function_name](**arguments)
-
-        except NameError as e:
-            result = {"prompt": "", "data": e}
-
-        end_time = time.perf_counter()
+        if function_name in handlers:
+            db_query_start = time.perf_counter()
+            result = handlers[function_name](**arguments)
+            end_time = time.perf_counter()
+        else:
+            return response
 
         print(f"- Context product: {self.context_product}")
         print(f"- Function name: {function_name}")
         print(f"- Arguments: {arguments}")
-        print(f"- User message: {user_message}")
         print("================================================")
         print(f"Tool search time: {duration:.1f} s")
         print(f"DB query duration: {end_time - db_query_start:.1f} s")
         print(f"Total tool time: {end_time - start_time:.1f} s")
         print("================================================")
 
+        prompt = ""
+        user_content = user_message
         if result:
-            prompt = {result.get("prompt", "")}
-            context = f"Context: \n\n{result.get('data', '')}\n\n"
-
+            prompt = result.get("prompt", "")
+            data = result.get("data", "")
+            context = f"Context: \n\n{data}\n\n"
+            user_content = (
+                f"{context}Render all products from the context.\n\n"
+                if isinstance(data, list)
+                else f"{context}{user_message}\n\n"
+            )
             print(f"Function call result: {result.get('data', '')}")
             print("================================================")
-        else:
+
+        elif function_name:
             prompt = self.valves.PROMPT_NOTHING_FOUND
             context = ""
 
+        # print(f"------> propmpt: {prompt}")
+        # print(f"------> user_content: {user_content}")
         messages = [
             {
                 "role": "system",
@@ -1313,7 +1189,7 @@ Begin your response now in this JSON-only format.
             },
             {
                 "role": "user",
-                "content": f"{context}\n{user_message}",
+                "content": user_content,
             },
         ]
 
@@ -1334,7 +1210,7 @@ Begin your response now in this JSON-only format.
                     max_tokens=16384,
                     temperature=body.get("temperature", 0),
                     top_p=body.get("top_p", 0.3),
-                    extra_body={"top_k": 5},
+                    extra_body={"top_k": 3},
             ):
                 # print(f"---> chunk: {chunk}")
                 if first_chunk:
