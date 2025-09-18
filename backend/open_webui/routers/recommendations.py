@@ -29,8 +29,8 @@ from open_webui.utils.models import get_all_models
 from open_webui.models.recommendations import ProcessRecommendationForm
 from open_webui.retrieval.vector.dbs.pgvector import RecommendationSchema
 from open_webui.retrieval.functions.utils import (get_embeddings)
-
 from open_webui.models.recommendations import get_recommendation_by_tag
+from open_webui.retrieval.functions.utils import cleanup_csv, normalize_tags
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MODELS"])
@@ -41,6 +41,7 @@ router = APIRouter()
 
 @router.get("/", response_model=Optional[RecommendationModel])
 def find_by_tag(tag: str, user=Depends(get_verified_user)):
+    # We search recommendation by tag
     print("Tag:", tag)
     rec = get_recommendation_by_tag(tag) if tag else None
 
@@ -167,25 +168,4 @@ def save_recommendation_to_vector_db(
     except Exception as e:
         log.exception(e)
         raise e
-
-
-def string_to_array(s: str) -> list[str]:
-    seen = set()
-    arr = []
-    for item in s.split(","):
-        tag = item.strip()
-        if tag and tag not in seen:
-            arr.append(tag)
-            seen.add(tag)
-    return arr
-
-
-def normalize_tags(tags: str) -> str:
-    return ", ".join(string_to_array(tags)).lower()
-
-def cleanup_csv(s: str) -> str:
-    return ", ".join(string_to_array(s))
-
-
-
 

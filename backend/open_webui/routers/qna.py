@@ -11,10 +11,6 @@ from fastapi import (
     status,
 )
 
-import tiktoken
-
-from langchain.text_splitter import RecursiveCharacterTextSplitter, TokenTextSplitter
-
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.retrieval.vector.factory import VECTOR_DB_CLIENT
@@ -27,9 +23,6 @@ from open_webui.routers.ollama import GenerateEmbedForm, get_api_key
 from open_webui.utils.models import get_all_models
 from open_webui.models.qna import ProcessQNAForm
 from open_webui.retrieval.vector.dbs.pgvector import QNASchema
-
-from open_webui.routers.recommendations import string_to_array
-
 from open_webui.models.qna import get_qna_by_embedding
 from open_webui.retrieval.functions.utils import get_embeddings
 
@@ -86,31 +79,6 @@ def save_qna_to_vector_db(
         add: bool = False,
         user = None,
 ) -> bool:
-    # Check if entries with the same hash (metadata.hash) already exist
-    if split:
-        if request.app.state.config.TEXT_SPLITTER in ["", "character"]:
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=request.app.state.config.CHUNK_SIZE,
-                chunk_overlap=request.app.state.config.CHUNK_OVERLAP,
-                add_start_index=True,
-            )
-        elif request.app.state.config.TEXT_SPLITTER == "token":
-            log.info(
-                f"Using token text splitter: {request.app.state.config.TIKTOKEN_ENCODING_NAME}"
-            )
-
-            tiktoken.get_encoding(str(request.app.state.config.TIKTOKEN_ENCODING_NAME))
-            text_splitter = TokenTextSplitter(
-                encoding_name=str(request.app.state.config.TIKTOKEN_ENCODING_NAME),
-                chunk_size=request.app.state.config.CHUNK_SIZE,
-                chunk_overlap=request.app.state.config.CHUNK_OVERLAP,
-                add_start_index=True,
-            )
-        else:
-            raise ValueError(ERROR_MESSAGES.DEFAULT("Invalid text splitter"))
-
-        docs = text_splitter.split_documents(docs)
-
     try:
         if VECTOR_DB_CLIENT.has_qna(qna_id=id):
             log.info(f"qna id {id} already exists")

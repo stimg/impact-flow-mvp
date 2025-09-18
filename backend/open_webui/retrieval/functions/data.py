@@ -89,6 +89,8 @@ product_properties = [
     "ingredients",
     "formulation_origin",
     "user_experience",
+    "intake_recommendation",
+    "history"
 ]
 
 recommendation_tags = [
@@ -136,12 +138,12 @@ recommendation_tags = [
     "Hepatitis",
     "Herzinfarkt, Prophylaxe",
     "Herzinsuffizienz",
-    "Herzkranzgefäßerkrankung",
+    "Herzkranzgefässerkrankung",
     "Herzrhythmusstörung",
     "Herzunruhe, Herzrasen",
     "Hörschwäche",
     "Immunstärkung",
-    "Kalte Hände und Füße",
+    "Kalte Hände und Füsse",
     "Konzentrationsstörungen",
     "Kopfschmerzen, Migräne",
     "Krebserkrankungen",
@@ -153,10 +155,10 @@ recommendation_tags = [
     "Muskelschwäche",
     "Muskelverspannungen",
     "Muskelzuckungen",
-    "Nachtschweiß",
+    "Nachtschweiss",
     "Nackenverspannungen, Nackenschmerzen",
     "Potenzprobleme",
-    "Prostatavergrößerung",
+    "Prostatavergrösserung",
     "Rheuma",
     "Rückenschmerzen",
     "Schlafstörungen",
@@ -213,7 +215,6 @@ questions = {
         "Welche Zutaten hat das Produkt",
 
         "Was sagen die Leute über das produkt?",
-        "Wer hat das Produkt erfunden?",
 
         "Wie soll ich das Produkt einnehmen?",
         "Wie verwendet man das Produkt?",
@@ -254,7 +255,6 @@ questions = {
         "Wie fühlen sich die Menschen nach der Einnahme?",
         "Welche Erfahrungen haben Sportler mit dem Produkt gemacht?",
         "Haben Kunden über Nebenwirkungen gesprochen?",
-        "Was ist das Besondere laut Erfahrungsberichten?",
 
         # Categories
         "Welche Produkte gehören in die Kategorie Beauty & Lifestyle?",
@@ -266,13 +266,10 @@ questions = {
 
         "Welche Bundles gibt es?",
         "Gibt es Sparpakete mit mehreren Produkten?",
-        "Finde ich hier Starter-Sets?",
 
         "Welche Produkte gibt es mit chinesischen Rezepturen?",
-        "Was sind typische chinesische Heilrezepte?",
 
         "Was ist der Ethno Health Coach?",
-        "Gibt es hier eine Beratung oder Kurse?",
         "Was bietet mir der Ethno Health Coach?",
 
         "Welche Produkte gehören in die Ethno-Hausapotheke?",
@@ -284,16 +281,11 @@ questions = {
         "Wofür verwendet man den Testsatz?",
         "Wie funktioniert ein Testsatz?",
 
-        "Welche Produkte sind für Kinder geeignet?",
-        "Welche Nahrungsergänzungen sind für Kinder gedacht?",
-
         "Was gehört in die Kategorie Omega Go!?",
         "Welche Vorteile hat Omega Go?",
-        "Sind das schnelle Energieprodukte?",
 
         "Welche Produkte gibt es bei Omega-Öle & Vitalkomplex?",
         "Sind hier Omega-3-Produkte enthalten?",
-        "Welche Vitalkomplexe finde ich hier?",
         "Sind das Produkte für Herz und Kreislauf?",
 
         "Gibt es eine komplette Liste aller Kategorien?",
@@ -307,11 +299,10 @@ questions = {
         "Welche Produkte gehören zu Shape Classic?",
 
         "Gibt es hier Proteinprodukte?",
-        "Was hilft beim Gewichtsverlust?",
+        "Was hilft beim Abnehmen?",
         "Welche Produkte unterstützen den Stoffwechsel?",
 
         "Welche Produkte gibt es zur tibetischen Rezeptur Lung?",
-        "Ist das eine traditionelle tibetische Mischung?",
         "Welche Inhaltsstoffe stecken in der Rezeptur Lung?",
         "Wofür ist die Rezeptur Lung gedacht?",
         "Gibt es Erfahrungsberichte zu Lung?",
@@ -325,125 +316,54 @@ questions = {
         "Welche Vorteile hat das Vorzugspaket?",
 
         # Misc
-        # "Was ist Ethno Health?",
         "Wie ist die Rückgabe und Bezahlung geregelt?",
         "Wie viele verschiedene Rezepturen bietet Ethno Health an?",
         "Welche Produktformen gibt es bei Ethno Health?",
-        # "Wie unterstützt Ethno Health die Nachhaltigkeit bei der Beschaffung seiner Zutaten?",
         "Werden die Produkte auf Reinheit geprüft?",
-        # "Wie sieht ein typischer Erfahrungsbericht zu Ethno Health aus?",
-        # "Gibt es Produkte für die Unterstützung der Darmgesundheit?",
-        # "Welche Qualitätsstandards erfüllt Ethno Health bei der Herstellung seiner Produkte?",
         "Kann ich das produkt während der Schwangerschaft konsumieren?",
-        # "Welche bekannten Pflanzengruppen verwendet Ethno Health?",
         "Darf das Produkt in der Schwangerschaft eingenommen werden?",
-        # "Welche besonderen Qualitätsstandards setzt Ethno Health, um sicherzustellen, dass die Produkte stets den höchsten Ansprüchen gerecht werden?",
         "Ist die Einnahme der Ethno-Health Produkte erlaubt, wenn ich aktuell verschreibungspflichtige Medikamente benutze?",
-        # "Ich habe gehört, dass Nahrungsergänzungsmittel manchmal kritisch gesehen werden. Was macht die Produkte von Ethno Health besonders?",
         "Ist das Produkt vegan und welche Qualitätsmerkmale werden genannt?",
         "Wie bewahre ich die Produkt auf?",
         "Wie kann ich Hilfe bekommen?",
         "Wie fange ich mit Mentora an?",
         "Warum sollte ich den Omega‑3‑Index messen lassen?",
         "Dürfen schwangere Ethno Health Produkte verwenden?",
-        # "Man hört oft, dass Nahrungsergänzungsmittel nicht wirklich notwendig sind. Warum sollte man trotzdem zu den Produkten von Ethno Health greifen?",
-        # "Was macht die hochwertigen, natürlichen Inhaltsstoffe von Ethno Health so besonders wirksam für das tägliche Wohlbefinden?",
-        # "Einige Menschen glauben, dass natürliche Produkte nicht so wirksam sind wie konventionelle Medizin. Wie steht Ethno Health dazu?",
         "Gibt es Nebenwirkungen bei der Einnahme von Produkt?",
-        # "Auf welche Weise unterstützen die sorgfältig ausgewählten Inhaltsstoffe von Ethno Health das Immunsystem und fördern die Vitalität im Alltag?",
-        # "Kann ich Ethno Health Produkte auch einnehmen, wenn ich Medikamente nehme?",
         "Inwiefern profitieren Vegetarier und Veganer von der umfassenden Produktpalette, die Ethno Health anbietet?",
         "Dürfen Ethno-Health Produkte bei Einnahme von Medikamenten eingenommen werden?",
-        # "Wie wirkt sich das Produkt auf die Haut während der Schwangerschaft aus?",
-        # "Wie trägt die nachhaltige Beschaffung der Zutaten durch Ethno Health zum Schutz der Umwelt und zur Unterstützung globaler Gemeinschaften bei?",
         "Was unterstützt meinen Fokus, wenn ich einen klaren Kopf bei der Arbeit brauche?",
         "Kann das Produkt mit anderen Nahrungsergänzungsmitteln kombiniert werden?",
         "Kann ich die Produkte günstiger einkaufen?",
-        # "Was kann ich nehmen, um mein Immunsystem im Alltag zu stärken?",
-        # "Welches Produkt passt, wenn ich mich einfach insgesamt etwas leichter und wohler fühlen will?",
-        # "Mit welchen Routinen lässt sich das Produkt gut kombinieren?",
         "Was hat Biohacking mit der Mentora App zu tun?",
         "Gibt es Vorzugspakete die ich günstiger kaufen kann?",
         "Können die Produkte bei einer Krebs Diagnose eingesetzt werden?",
         "Was ist Mentora?",
-        # "Welcher Zielbereich wird häufig diskutiert?",
-        # "Fällt der Omega‑3‑Index wieder ab, wenn ich Pausen mache?",
         "Sind die Produkte frei von bestimmten Zusätzen oder Allergenen?",
-        # "Was kann mir helfen, meine Leber sanft zu unterstützen, wenn ich mich mal entlasten will?",
         "Was ist die Markenessenz von Ethno Health?",
         "Was ist die Philosophie von Ethno Health?",
-        # "Was könnte mir helfen, meine Haut und Zellen vor oxidativem Stress zu schützen?",
         "Wie komme ich bei Anspannung wieder schneller zur Ruhe?",
-        # "Was kann ich tun, wenn ich keine Wirkung spüre?",
-        # "Was sagen die Menschen über Ethno Health Produkte?",
-        # "Wenn ich ein Produkt suche, das mir hilft, abends zur Ruhe zu kommen und besser zu schlafen, welches wäre passend?",
-        # "Welche Erfolgsgeschichten gibt’s?",
-        # "Welches Produkt hilft mir dabei, mich nach einer langen Arbeitswoche wieder etwas ausgeglichener zu fühlen?",
-        # "Was könnte ich nehmen, um meine Haut von innen zu unterstützen, wenn sie mal etwas mehr Pflege braucht?",
-        # "Was ist der Omega‑3‑Index?",
-        # "Reicht Leinöl (ALA) als alleinige Quelle?",
-        # "Welche Menge ist sinnvoll?",
-        # "Gibt es typische Nebenwirkungen beim Produkt",
         "Kann ich Nahrungsergänzungen während einer Krebserkrankung nutzen?",
         "Gibt es Wechselwirkungen mit Medikamenten?",
         "Sind die Produkte von Ethno Health für Vegetarier und Veganer geeignet?",
-        # "Wer sind die typischen Kund:innen von Ethno Health?",
         "Was zeichnet die Rezepturen von Ethno Health aus?",
         "Woher stammen die Zutaten für Ethno Health Produkte?",
-        # "Für welche Werte steht Ethno Health bei der Produktentwicklung?",
-        # "Kann ich als Einzelperson Partner von Ethno Health werden?",
-        # "Was versteht Ethno Health unter ganzheitlicher Gesundheit?",
         "Gibt es Produkte mit Vitalpilzen?",
-        # "Wie achtet Ethno Health auf Nachhaltigkeit?",
-        # "Was ist die Philosophie von Ethno Health beim Thema Toxizität?",
         "Gibt es Produkte speziell für den Zellschutz?",
-        # "Gibt es Produktlinien für unterschiedliche Lebensbereiche?",
-        # "Sind einzelne Rezepturen individuell kodiert oder beschrieben?",
         "Wie werden die Produkte hergestellt?",
         "Gibt es spezielle Produkte für den Stoffwechsel?",
-        # "Gibt es einen Blog oder Informationsbereich bei Ethno Health?",
-        # "Wie viele Kunden vertrauen bereits auf Ethno Health?",
-        # "Können Ethno Health Produkte als Alternative zu pharmazeutischen Arzneien gelten?",
-        # "Welche Qualitätsversprechen gibt Ethno Health seinen Kunden?",
-        # "Gibt es einen Ethno Health Produktkatalog und was enthält er?",
-        # "Welche Krankheiten und Symptome können mit Ethno Health Rezepturen unterstützt werden?",
-        # "Wie funktioniert der Ethno-Health-Testsatz für Therapeuten?",
-        # "Welche Rolle spielt Dr. Ingfried Hobert bei Ethno Health?",
-        # "Welche Prinzipien gelten bei Ethno Health für Umwelt und Ethik?",
-        "Welche Produktlinie ist am beliebtesten?",
         "Wie lange dauert die Lieferung typischerweise?",
-        # "Gibt es Produkte für Frauen und Männer mit speziellen Formulierungen?",
-        # "Was macht den Unterschied zwischen Ethno Health und anderen Naturheilmarken?",
         "Sind Ethno Health Produkte auch für Kinder geeignet?",
         "Gibt es Kombipakete oder Sparangebote?",
-        # "Welche Produktneuheiten gab es zuletzt?",
-        # "Was ist im „Ethno-Hausapotheke“dev-Set enthalten?",
-        # "Gibt es zertifizierte Händler für die Rohstoffe?",
-        # "Wie werden Kunden bei der Auswahl der passenden Rezeptur beraten?",
-        # "In welchen Ländern ist Ethno Health erhältlich?",
-        # "Gibt es Kooperationen mit Apotheken oder Praxen?",
-        # "Wie kann man Feedback zu den Produkten geben?",
-        # "Werden bei Ethno Health moderne Diagnosemethoden eingesetzt?",
-        # "Gibt es Geschenksets oder spezielle Bundles?",
-        # "Wie kann man Ethno Health Coach werden und was bringt das?",
         "Gibt es bei dem Produkt etwas zu beachten?",
         "Sind Ethno Health Produkte vegan?",
-        # "Welche Zielsetzungen verfolgt Ethno Health mit seinen Rezepturen?",
         "Ist eine persönliche Beratung möglich?",
-        # "Wie oft sollte ich den Omega‑3‑Index kontrollieren?",
-        # "Ist Öl oder sind Kapseln besser?",
-        # "Welche Pilze sind häufig enthalten?",
-        # "Was ist ein Vorteil der Kombination aus Naturwissen und moderner Wissenschaft bei Ethno Health?",
-        # "Ist die Dosierung wissenschaftlich geprüft?",
-        # "Sind die Produkte tierversuchsfrei?",
-        "Sind die Produkte frei von Zusatzstoffen?",
     ],
 
     "recommendations": [
         # Freie
         "Welches Produkt hilft bei Allergien?",
         "Welche Produkte sind wirksam gegen Husten?",
-        "Ich bin beim Durchfall getroffen, was könnt ihr empfehlen?",
         "Haben Sie Produkte für Klarheit und Konzentration?",
         "Gibt es Produkte für die Unterstützung der Darmgesundheit?",
         "Welche Produkte unterstützen beim Lernen?",
@@ -497,9 +417,9 @@ questions = {
         "Was kann ich nehmen, wenn mir das Essen nicht mehr schmeckt?",
 
         # Arteriosklerose
-        "Gibt es Produkte zur Unterstützung der Gefäße bei Arteriosklerose?",
+        "Gibt es Produkte zur Unterstützung bei Arteriosklerose?",
         "Wie kann ich meine Arterien gesund halten?",
-        "Was kann Ablagerungen in den Gefäßen vorbeugen?",
+        "Was kann Ablagerungen in den Gefässen vorbeugen?",
 
         # Arthritis
         "Was lindert die Beschwerden bei Arthritis?",
@@ -544,12 +464,11 @@ questions = {
         # Blutgerinnung, Thrombose
         "Gibt es Produkte, die die Blutgerinnung regulieren?",
         "Was hilft zur Vorbeugung gegen Thrombosen?",
-        "Wie kann ich meine Gefäße gesund halten?",
+        "Wie kann ich meine Gefässe gesund halten?",
 
         # Bluthochdruck
         "Ich habe Bluthochdruck – gibt es Produkte, die das Herz unterstützen?",
         "Was hilft, den Blutdruck natürlich zu senken?",
-        "Welche Produkte entlasten das Herz-Kreislauf-System?",
 
         # Bronchitis
         "Was hilft bei akuter Bronchitis?",
@@ -594,7 +513,6 @@ questions = {
         # Durchblutungsstörungen
         "Ich habe Durchblutungsstörungen – was kann helfen?",
         "Welche Produkte fördern die Durchblutung?",
-        "Wie kann ich kalten Händen und Füßen vorbeugen?",
 
         # Erkältung, Virusinfekt, Grippe
         "Ich habe eine Erkältung – was können Sie empfehlen?",
@@ -614,7 +532,6 @@ questions = {
         # Fettstoffwechselstörung
         "Was hilft bei Fettstoffwechselstörungen?",
         "Gibt es Produkte, die die Blutfette regulieren?",
-        "Wie kann ich meinen Cholesterinspiegel unterstützen?",
 
         # Fibromyalgie, Faser-Muskel-Schmerz
         "Ich habe Fibromyalgie – was könnte Linderung bringen?",
@@ -624,7 +541,6 @@ questions = {
         # Frieren, Frösteln, Kälte
         "Ich friere ständig – was kann helfen?",
         "Gibt es Produkte gegen das ständige Frösteln?",
-        "Wie bekomme ich warme Hände und Füße?",
 
         # Gastritis
         "Ich habe Gastritis – was könnte meinen Magen beruhigen?",
@@ -648,7 +564,6 @@ questions = {
 
         # Gicht
         "Was hilft bei Gichtanfällen?",
-        "Gibt es Produkte, die den Harnsäurespiegel senken?",
         "Wie kann ich meine Gelenke bei Gicht schützen?",
 
         # Grübeln, zu viel Denken
@@ -673,16 +588,11 @@ questions = {
 
         # Herzinfarkt, Prophylaxe
         "Was hilft zur Herzinfarkt-Prophylaxe?",
-        "Gibt es Produkte, die die Herzkranzgefäße schützen?",
-        "Wie kann ich mein Herz langfristig stärken?",
 
         # Herzinsuffizienz
-        "Ich habe Herzschwäche – gibt es unterstützende Produkte?",
-        "Wie kann ich die Herzleistung verbessern?",
         "Was entlastet das Herz bei Insuffizienz?",
 
-        # Herzkranzgefäßerkrankung
-        "Gibt es Produkte, die die Herzkranzgefäße gesund halten?",
+        # Herzkranzgefässerkrankung
         "Was unterstützt die Durchblutung am Herzen?",
         "Wie kann ich mein Risiko bei Herzkrankheiten senken?",
 
@@ -706,10 +616,9 @@ questions = {
         "Gibt es Produkte, die mich weniger anfällig für Infekte machen?",
         "Wie kann ich meine Abwehrkräfte aufbauen?",
 
-        # Kalte Hände und Füße
+        # Kalte Hände und Füsse
         "Ich habe ständig kalte Hände – was kann ich tun?",
-        "Welche Produkte helfen gegen kalte Füße?",
-        "Wie bekomme ich eine bessere Durchblutung?",
+        "Welche Produkte helfen gegen kalte Füsse?",
 
         # Konzentrationsstörungen
         "Ich kann mich schlecht konzentrieren – was hilft?",
@@ -733,12 +642,10 @@ questions = {
 
         # Leistungsschwäche
         "Ich fühle mich leistungsschwach – was bringt neue Kraft?",
-        "Gibt es Produkte für mehr Ausdauer?",
         "Wie bekomme ich meine Energie zurück?",
 
         # Lunge, Luftnot
         "Ich habe schwache Lungen – was könnte helfen?",
-        "Welche Produkte unterstützen die Atmung?",
         "Was hilft bei Luftnot und flacher Atmung?",
 
         # Magenschmerzen
@@ -766,8 +673,8 @@ questions = {
         "Gibt es Produkte, die gegen unruhige Muskeln helfen?",
         "Wie kann ich meinen Körper ausgleichen?",
 
-        # Nachtschweiß
-        "Ich habe oft Nachtschweiß – was kann helfen?",
+        # Nachtschweiss
+        "Ich habe oft Nachtschweiss – was kann helfen?",
         "Welche Produkte regulieren das Schwitzen?",
         "Wie komme ich ruhiger durch die Nacht?",
 
@@ -781,8 +688,8 @@ questions = {
         "Welche Unterstützung gibt es bei Erektionsschwäche?",
         "Wie kann ich meine Potenz stärken?",
 
-        # Prostatavergrößerung
-        "Meine Prostata ist vergrößert – was unterstützt die Blase?",
+        # Prostatavergrösserung
+        "Meine Prostata ist vergrössert – was unterstützt die Blase?",
         "Gibt es Produkte gegen nächtlichen Harndrang?",
         "Welche Produkte helfen der Prostata?",
 
@@ -814,7 +721,6 @@ questions = {
         # Schwache Glieder
         "Meine Glieder fühlen sich schwach an – was könnte helfen?",
         "Welche Produkte bringen wieder Kraft in die Arme und Beine?",
-        "Wie bekomme ich wieder mehr Stabilität?",
 
         # Schwindel
         "Ich habe oft Schwindel – was kann helfen?",
@@ -824,7 +730,6 @@ questions = {
         # Sodbrennen
         "Ich habe ständig Sodbrennen – was könnte helfen?",
         "Welche Produkte sind effektiv bei Sodbrennen?",
-        "Wie kann ich die Magensäure regulieren?",
 
         # Taubheitsgefühle
         "Ich habe manchmal Taubheitsgefühle – was kann helfen?",
@@ -839,7 +744,6 @@ questions = {
         # Unfruchtbarkeit
         "Ich habe Probleme mit der Fruchtbarkeit – was könnte helfen?",
         "Welche Produkte fördern die Zeugungsfähigkeit?",
-        "Gibt es Unterstützung für die Fruchtbarkeit bei Frauen?",
 
         # Unruhe, Stress
         "Ich bin ständig gestresst – was bringt Ruhe?",
@@ -869,11 +773,9 @@ questions = {
         # Wechseljahrsbeschwerden
         "Ich bin in den Wechseljahren – was kann helfen?",
         "Welche Produkte lindern Hitzewallungen?",
-        "Wie komme ich ausgeglichener durch die Wechseljahre?",
 
         # Zahnprobleme
         "Ich habe Zahnprobleme – gibt es Produkte zur Unterstützung?",
-        "Welche Produkte stärken das Zahnfleisch?",
         "Wie kann ich meine Zähne von innen schützen?",
 
         # Zwänge, Phobien
@@ -883,3 +785,15 @@ questions = {
     ]
 }
 
+mentora_hints = [
+    "Nimm dir jeden Tag einen Moment, um etwas zu tun, das dir wirklich Freude macht – auch wenn es nur ein paar Minuten sind.",
+    "Erinnere dich daran, genug Wasser zu trinken – manchmal ist das der einfachste Weg, um dich gleich ein bisschen frischer zu fühlen.",
+    "Versuch mal, am Ende des Tages drei Dinge aufzuschreiben, für die du dankbar bist – das hebt die Stimmung oft nachhaltig.",
+    "Beweg dich ein bisschen, auch wenn es nur ein kurzer Spaziergang ist – frische Luft und ein paar Schritte wirken oft Wunder.",
+    "Leg zwischendurch mal dein Handy weg und gönn dir ein paar Minuten ohne Bildschirm – das hilft oft, den Kopf freizubekommen.",
+    "Probier mal, bewusst tief durchzuatmen, wenn du dich gestresst fühlst – ein paar ruhige Atemzüge können wirklich Wunder wirken.",
+    "Versuch, dir kleine Pausen in deinen Tag einzubauen, in denen du einfach mal nichts tust – das lädt deine Energie wieder auf.",
+    "Hör auf deine innere Stimme und vertraue darauf, dass du selbst am besten weißt, was dir guttut.",
+    "Gönn dir ab und zu etwas, das dich inspiriert – sei es ein gutes Buch, Musik oder einfach ein inspirierendes Gespräch.",
+    "Erinnere dich daran, dass Selbstfürsorge kein Luxus ist, sondern ein wichtiger Teil deines Wohlbefindens – du hast es verdient, gut für dich zu sorgen."
+]

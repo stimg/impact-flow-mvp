@@ -85,9 +85,12 @@ class ProductChunk(Base):
         vmetadata = Column(LargeBinary, nullable=True)
     else:
         chunk_text = Column(Text, nullable=True)
-        chunk_text = Column(Text, nullable=True)
         vmetadata = Column(MutableDict.as_mutable(JSONB), nullable=True)
 
+    # derived (server-computed)
+    tags_arr   = Column(ARRAY(Text))
+    tags_search= Column(Text)
+    app_tsv    = Column(Text)  # or use a TSVECTOR type if you have it
 
 class QNASchema(Base):
     __tablename__ = "q_and_a"
@@ -285,52 +288,22 @@ class PgvectorClient(VectorDBBase):
 
     def insert_product_chunks(self, product_id: str, items: List[VectorItem]) -> None:
         try:
-            if PGVECTOR_PGCRYPTO:
-                for item in items:
-                    # Use raw SQL for BYTEA/pgcrypto
-                    self.session.execute(
-                        text(
-                            """
-                            INSERT INTO product_chunks
-                            (chunk_id, product_id, chunk_text, embedding, vmetadata)
-                            VALUES (
-                                :id, :product_id, :embedding,
-                                pgp_sym_encrypt(:chunk_text, :key),
-                                pgp_sym_encrypt(:metadata::text, :key)
-                            )
-                            ON CONFLICT (product_id) DO NOTHING
-                        """
-                        ),
-                        {
-                            "chunk_id": item["chunk_id"],
-                            "product_id": product_id,
-                            "section": item["section"],
-                            "chunk_text": item["chunk_text"],
-                            "embedding": item["embedding"],
-                            "vmetadata": json.dumps(item["metadata"]),
-                            "key": PGVECTOR_PGCRYPTO_KEY,
-                        },
-                    )
-                self.session.commit()
-                log.info(f"Encrypted & inserted {len(items)} into '{product_id}'")
-
-            else:
-                new_items = []
-                for item in items:
-                    new_chunk = ProductChunk(
-                        chunk_id=item["chunk_id"],
-                        product_id=product_id,
-                        section=item["section"],
-                        chunk_text=item["chunk_text"],
-                        embedding=item["embedding"],
-                        vmetadata=item["metadata"],
-                    )
-                    new_items.append(new_chunk)
-                self.session.bulk_save_objects(new_items)
-                self.session.commit()
-                log.info(
-                    f"Inserted {len(items)} items into product '{product_id}'."
+            new_items = []
+            for item in items:
+                new_chunk = ProductChunk(
+                    chunk_id=item["chunk_id"],
+                    product_id=product_id,
+                    section=item["section"],
+                    chunk_text=item["chunk_text"],
+                    embedding=item["embedding"],
+                    vmetadata=item["metadata"],
                 )
+                new_items.append(new_chunk)
+            self.session.bulk_save_objects(new_items)
+            self.session.commit()
+            log.info(
+                f"Inserted {len(items)} items into product '{product_id}'."
+            )
         except Exception as e:
             self.session.rollback()
             log.exception(f"Error during insert: {e}")
@@ -338,37 +311,11 @@ class PgvectorClient(VectorDBBase):
 
     def insert_qna(self, qna: QNASchema) -> None:
         try:
-            if PGVECTOR_PGCRYPTO:
-                # Use raw SQL for BYTEA/pgcrypto
-                self.session.execute(
-                    text(
-                        """
-                        INSERT INTO q_and_a
-                        (id, question_text, answer_text, hint, q_embedding, a_embedding)
-                        VALUES (
-                            :qna.id,
-                            pgp_sym_encrypt(:qna.question_text, :key),
-                            pgp_sym_encrypt(:qna.answer_text, :key),
-                            pgp_sym_encrypt(:qna.hint, :key),
-                            :qna.q_embedding, :qna.a_embedding
-                        )
-                        ON CONFLICT (id) DO NOTHING
-                    """
-                    ),
-                    {
-                        **qna,
-                        "key": PGVECTOR_PGCRYPTO_KEY,
-                    },
-                )
-                self.session.commit()
-                log.info(f"Encrypted & inserted data into qna '{id}'")
-
-            else:
-                self.session.bulk_save_objects([qna])
-                self.session.commit()
-                log.info(
-                    f"Inserted data into qna '{id}'."
-                )
+            self.session.bulk_save_objects([qna])
+            self.session.commit()
+            log.info(
+                f"Inserted data into qna '{id}'."
+            )
         except Exception as e:
             self.session.rollback()
             log.exception(f"Error during insert: {e}")
@@ -376,36 +323,11 @@ class PgvectorClient(VectorDBBase):
 
     def insert_recommendation(self, recommendation: RecommendationSchema) -> None:
         try:
-            if PGVECTOR_PGCRYPTO:
-                # Use raw SQL for BYTEA/pgcrypto
-                self.session.execute(
-                    text(
-                        """
-                        INSERT INTO product_recommendations
-                        (id, tags, recommended, suitable, info, hint, vec_tags, vec_info)
-                        VALUES (
-                            :recommendation.id, :recommendation.tags, 
-                            :recommendation.recommended, :recommendation.suitable,
-                            :recommendation.info, :recommendation.hint,
-                            :recommendation.vec_tags, :recommendation.vec_info
-                        )
-                        ON CONFLICT (id) DO NOTHING
-                    """
-                    ),
-                    {
-                        **recommendation,
-                        "key": PGVECTOR_PGCRYPTO_KEY,
-                    },
-                )
-                self.session.commit()
-                log.info(f"Encrypted & inserted data into recommendation '{id}'")
-
-            else:
-                self.session.bulk_save_objects([recommendation])
-                self.session.commit()
-                log.info(
-                    f"Inserted data into recommendation '{id}'."
-                )
+            self.session.bulk_save_objects([recommendation])
+            self.session.commit()
+            log.info(
+                f"Inserted data into recommendation '{id}'."
+            )
         except Exception as e:
             self.session.rollback()
             log.exception(f"Error during insert: {e}")

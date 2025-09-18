@@ -24,7 +24,8 @@ from open_webui.models.products import ProductModel, ProcessProductForm, Product
 from open_webui.env import ENABLE_FORWARD_USER_INFO_HEADERS
 from open_webui.routers.ollama import GenerateEmbedForm, get_api_key
 from open_webui.utils.models import get_all_models
-from open_webui.retrieval.functions.utils import get_embeddings
+from open_webui.retrieval.functions.utils import get_embeddings, cleanup_csv
+
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MODELS"])
@@ -91,7 +92,13 @@ def save_product_to_vector_db(
         user = None,
 ) -> bool:
     # Extract section names and contents
-    texts = [data[section] for section in data]
+    texts = []
+    for section in data:
+        if section in ["tags", "supporting_products", "recommended_products", "combinable_with", "similar_products"]:
+            texts.append(cleanup_csv(data[section]))
+        else:
+            texts.append(data[section])
+
     sections = list(data.keys())
 
     # Check if entries with the same hash (metadata.hash) already exist

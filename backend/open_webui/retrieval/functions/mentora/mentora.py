@@ -14,6 +14,7 @@ from open_webui.retrieval.functions.utils import (
     get_user_name_from_full_name,
     get_embedding,
     sanitize_user_input,
+    parse_template,
 )
 from open_webui.retrieval.functions.data import (
     product_names,
@@ -73,158 +74,181 @@ class Pipe:
 
         PROMPT_LIST: str = Field(
             default="""
-            INSTRUCTIONS:
-            - Always use Markdown format.
-            - List all the products from the list, keeping the order in the given list.
-            - For each product, always render:
-              1. Product name as the Markdown link. Take the product name from the JSON "name" property and the product link from the "reference_link" property.
-              2. The em dash (–) surrounded by spaces.
-              3. Product categories in cursive (*italic*).
 
-            - Render every list entry exactly like in this example:
+INSTRUCTIONS:
+- Always use Markdown format.
+- List all the products from the list, keeping the order in the given list.
+- For each product, always render:
+  1. Product name as the Markdown link. Take the product name from the JSON "name" property and the product link from the "reference_link" property.
+  2. The em dash (–) surrounded by spaces.
+  3. Product categories in cursive (*italic*).
 
-            [Burner](https://www.ethno-health.com/artikeldetail/product) – *Body & Clean*
+- Render every list entry exactly like in this example:
+
+[Burner](https://www.ethno-health.com/artikeldetail/product) – *Body & Clean*
+
             """,
             description="System prompt for product list.",
         )
         PROMPT_LIST_BY_PROPERTY: str = Field(
             default="""
-            Your goals:
-            1. Do not re-rank or filter. Assume the context is already filtered. Render all items.
-            2. Render **all** products from CONTEXT, **in the same order**, with no omissions or additions.
-            3. Language: **German only**.
-            4. Use the exact output format in “Rendering”.
 
-            Rendering:
-            - For each product, always render:
-              1. Product name as the Markdown link. Take the product name from the JSON "name" property and the product link from the "reference_link" property.
-              2. The em dash (–) surrounded by spaces.
-              3. Product categories in cursive (*italic*).
-              4. The property text.
+Always render the product name and category in a separate section
 
-            - Render **every product exactly** like in this example:            
-            [Burner](https://www.ethno-health.com/artikeldetail/product) – *Body & Clean*
-            
-            Das produkt ist speziell für Sportler entwickelt. Es hilft dabei, die Energie im Alltag 
-            zu steigern und den sportlichen Leistungsgrad zu verbessern.
+INSTRUCTIONS:
+- You must  always render for each product:
+1. Horizontal line (---).
+2. Product name as the Markdown link.
+3. On the same line, the em dash (–) surrounded by spaces.
+4. On the same line, categories in cursive (*italic*).
+5. The related property section or short product description.
 
-            **REMEMBER: Render all 3 products from the context, in the same order.**
+- Take the product name from the JSON "name" property and the product link from the "reference_link" property.
+- Never invent, alter, or change the product names. Render it exactly as taken from the context.
+
+- Render **every product exactly** like in this example:            
+[Lorem Ipsum](https://www.ethno-health.com/artikeldetail/lorem-ipsum) – *Lorem & Ipsum*
+
+Lorem ipsum dolor sit amet tempor dolor qui reprehenderit qui consequuntur voluptas sit voluptate culpa eos nisi. Lorem ipsum dolor sit amet cillum magnam magnam aliquip aut quasi sed sequi lorem. 
+
             """,
             description="System prompt for product list.",
         )
         PROMPT_CATEGORIES: str = Field(
             default="""
-            INSTRUCTIONS:
-            - Always use Markdown format.
-            - List all categories. Don't use an unordered list format.
-            - For each category render:
-              1. Category name in **bold**.
-              2. The em dash (–) surrounded by spaces.
-              3. Product tags: comma-separated, in cursive (*italic*).
 
-              - Render every category exactly like in this example:
+Task:
+You must render all categories from the list.
+For each category, you must render the category name and the list of the category products as Markdown links.
 
-              **Beauty & Lifestyle** – *Gewebe, Kollagenbildung, Haare, Muskeln, Haut, Nägel, Schönheit, Lifestyle*
+Instructions:
+- Always use Markdown format.
+- For each category from the context, you must always render: category in **bold**, em dash ( – ), the list of category products as Markdown links.
+- Take the category name from the "category" and the product list from the "products"  properties of the context JSON.
+- Never change, invent, or alter category, product names, or links. Render them EXACTLY as given.
+- You must render every category exactly as in this example:
+**category name 1** – [name 1](link 1)
+
+IMPORTANT: You must always render every category product as the Markdown link.
             """,
             description="System prompt for product list.",
         )
         PROMPT_DETAILS: str = Field(
             default="""
-                You MUST take the product name from the JSON "name" property and the product link from the "reference_link" property.
-                You MUST ignore any URLs found in any other fields.
-                Never invent or modify the URL or name.
 
-                INSTRUCTIONS:
-                - Always use Markdown format.
-                - You must always create the following sections using the JSON object from the context:
-                  1. Product name as the Markdown link.
-                  2. On the same line, the em dash (–) surrounded by spaces.
-                  3. On the same line, product categories are always in cursive (*italic*).
-                  4. Product description.
-                  5. Target audience.
-                  6. Application area.
-                  7. Advantages: Highlight the key benefits that set the product apart from others and explain the added value for users.
-                  8. New section with "---".
-                  9. Mentora pro hint (can be empty). DO NOT invent, alter, assume, or extend beyond the context. If the context does not contain a hint, explicitly state: "kein Tipp".
+Render the product name as a Markdown link, categories, your answer, and the Mentora pro hint.
+NEVER change or alter product name ({{NAME}}) and url ({{REFERENCE_LINK}}). ALWAYS render it exactly as given.
+You must use Markdown format.
+IMPORTANT: You must always render the product name and categories in the first line as a SEPARATE section, you answer follows in the next section.
 
-                - Always render section names in bold.
-                - For the "Mentora Pro Tipp" section, always render "Mentora Pro Tipp 💡:" section name before the content.
-                - Always render product details exactly as in this example:
-                [Energy-Plus](https://www.ethno-health.com/energy-plus) – *Sport & Vitaliy*
-                
-                **Produktbeschreibung:** Steigert die Energie im Alltag.
-                
-                **Zielgruppe:** Late Menschen
-                
-                **Anwendung:** Dreimal pro Tag
-                
-                **Vorteile:** Günstig und Effektiv
+INSTRUCTIONS:
+- Always use Markdown format.
+- You must always create the following sections using the JSON object from the context:
+  1. Product name and categories section exactly like this: "[{{NAME}}]({{REFERENCE_LINK}}) – *{{CATEGORIES}}*"
+  2. Combinable with the products section as Markdown links.
+  3. Product description section: "{{SHORT_DESCRIPTION}}".
+  4. Target audience section based {{TARGET_AUDIENCE}}.
+  5. Application area section: {{APPLICATION_AREA}}.
+  6. Advantages section: highlight the key benefits based on the context information.
+  7. New section with "---".
+  8. Mentora pro hint exactly like this: "**Mentora Pro Tipp** 💡: {{MENTORA_PRO_HINT}}".
 
-                ---
+- Always render section names in bold.
+- For the "Combinable with products" section:
+  1. You must always find the link in the "{{COMBINABLE_LINKS}}" by name
+  2. You must always render each product name as the Markdown link.
+- For the "Advantages" section, you must always highlight the key benefits that set the product apart from others and explain the added value for users.
+- Always render product details exactly as in this example:
+[{{NAME}}]({{REFERENCE_LINK}}) – *{{CATEGORIES}}*
 
-                **Mentora Pro Tipp 💡:** Lorem ipsum dolor sit amet esse quia sed id consectetur dolore ab non. Lorem ipsum dolor sit amet ipsum irure ut eius mollit sequi do incididunt quia.
+**Gut kmombinierbar mit:** {{COMBINABLE_LINKS}}
+
+**Produktbeschreibung:** {{SHORT_DESCRIPTION}}
+
+**Zielgruppe:**
+{{TARGET_AUDIENCE}}
+
+**Anwendung:**
+{{APPLICATION_AREA}}
+
+**Vorteile:**
+Lorem ipsum dolor sit amet adipisci dolor et mollit voluptatem. Lorem ipsum dolor sit amet beatae fugit esse. Lorem ipsum dolor sit amet ut sed neque totam amet qui esse. 
+
+---
+
+**Mentora Pro Tipp** 💡: {{MENTORA_PRO_HINT}}
+
+
+IMPORTANT: you MUST ALWAYS render every product name in the "Combinable with products" section as the Markdown link!
+
             """,
             description="System prompt for product details.",
         )
         PROMPT_PROPERTY: str = Field(
             default="""
-                You MUST take the product name from context.name and the product URL from context.reference_link.
-                You MUST render the first line as: [<context.name>](<context.url>) – *<context.categories>*
-                You MUST ignore any URLs found in any other fields.
-                Never invent or modify the URL or name.
 
-                INSTRUCTIONS:
-                - Always use Markdown format.
-                - You must always render:
-                  1. Product name as Markdown link.
-                  2. On the same line, the em dash (–) surrounded by spaces.
-                  3. On the same line, product categories are always in cursive (*italic*).
-                  4. On the new line, product property.
-                  9. New section with "---".
-                  5. Mentora pro hint (can be empty). DO NOT invent, alter, assume, or extend beyond the context. If the context does not contain a hint, explicitly state: "kein Tipp".
+Render the product name as a Markdown link, categories, your answer, and the Mentora pro hint.
+NEVER change or alter product name ({{NAME}}) and url ({{REFERENCE_LINK}}). ALWAYS render it exactly as given.
+You must use Markdown format.
+IMPORTANT: You must always render the product name and categories in the first line as a SEPARATE section, you answer follows in the next section.
 
-                - For the "Mentora Pro Tipp" section, always render "**Mentora Pro Tipp 💡:**" section name before the content.
-                - Always render "Mentora Pro Tipp 💡:" section header in **bold**.
-                - Always render product details exactly as in this example:
-                [Energy-Plus](https://www.ethno-health.com/energy-plus) – *Sport & Vitaliy*
-
-                Lorem ipsum dolor sit amet minim ullamco adipisci et laboris et at voluptas sint tempora eaque non.
-
-                ---
-                
-                **Mentora Pro Tipp 💡:** Lorem ipsum dolor sit amet esse quia sed id consectetur dolore ab non. Lorem ipsum dolor sit amet ipsum irure ut eius mollit sequi do incididunt quia.
+Instructions:
+You must always create the following sections:
+  1. The first section with text: "[{{NAME}}]({{REFERENCE_LINK}}) – *{{CATEGORIES}}*"
+  2. The second section with your answer.
+  3. The third section with "---".
+  4. The fourth section with the text: "**Mentora Pro Tipp** 💡: {{MENTORA_PRO_HINT}}".
+  
+  You must always render the output exactly as in this example:
+  [{{NAME}}]({{REFERENCE_LINK}}) – *{{CATEGORIES}}*
+  
+  Lorem ipsum dolor sit amet adipisci dolor et mollit voluptatem. Lorem ipsum dolor sit amet beatae fugit esse. Lorem ipsum dolor sit amet ut sed neque totam amet qui esse.
+   
+  ---
+  
+  **Mentora Pro Tipp** 💡: {{MENTORA_PRO_HINT}}
+  
+  
+IMPORTANT: You MUST ALWAYS render the product name and categories in a separate section!
+      
             """,
             description="System prompt for product property.",
         )
         PROMPT_QNA: str = Field(
             default="""
-            You MUST answer strictly and only based on the provided context.
-            - Use ALL relevant information from the context directly related to the user’s question.  
-            - DO NOT invent, assume, or extend beyond the context.
-            - Always answer in complete, competent, and professional German.  
-            - Preserve accuracy and factual correctness exactly as given in the context.  
-            - Do not add external knowledge, speculation, or assumptions.  
-            - Ensure the answer is concise but fully covers all information present in the context related to the question.
-            - At the end render Mentora pro hint (can be empty). DO NOT invent, alter, assume, or extend beyond the context. If the context does not contain a hint, explicitly state: "kein Tipp".
+
+Task:
+You MUST answer strictly and only based on the provided context.
+
+Instructions:
+- Never strip, change, or alter the Markdown links from the context; you must render them as is.
+- Use ALL relevant information from the context directly related to the user’s question.  
+- DO NOT invent, assume, or extend beyond the context.
+- Always answer in complete, competent, and professional German.  
+- Preserve accuracy and factual correctness exactly as given in the context.  
+- Do not add external knowledge, speculation, or assumptions.  
+- Ensure the answer is concise but fully covers all information present in the context related to the question.
 
             """,
             description="System prompt for product property.",
         )
         PROMPT_NOTHING_FOUND: str = Field(
             default="""
-            INSTRUCTIONS:
-            Render only these points:
-            - Politely say we've found nothing for your request.
-            - Ask to refine the query.
-            - Last, you always **must** suggest contacting our customer support. Render all three of our contacts:
-              1. Phone: +41 79 894 66 66
-              2. WhatsApp: +41 79 894 66 66 or ~Impact Flow
-              3. Buche einen Termin  in unserem Kalender.
-            - Always render calendar contact as a Markdown link to https://www.eTermin.net/Love369Wins/serviceid/576811?noinitscroll=1.
-            - Be concise.
 
-            - **NEVER** invent answer!
-            - **NEVER** give ANY recommendations or product links outside the provided context!
+INSTRUCTIONS:
+Render only these points:
+- Politely say we've found nothing for your request.
+- Ask to refine the query.
+- Last, you always **must** suggest contacting our customer support. Render all three of our contacts:
+  1. Phone: +41 79 894 66 66
+  2. WhatsApp: +41 79 894 66 66 or ~Impact Flow
+  3. Buche einen Termin  in unserem Kalender.
+- Always render calendar contact as a Markdown link to https://www.eTermin.net/Love369Wins/serviceid/576811?noinitscroll=1.
+- Be concise.
+
+- **NEVER** invent answer!
+- **NEVER** give ANY recommendations or product links outside the provided context!
+
             """,
             description="System prompt for product property.",
         )
@@ -273,14 +297,10 @@ class Pipe:
                              product_id,
                              jsonb_object_agg(
                                      section,
-                                     CASE section
-                                         WHEN 'name' THEN regexp_replace(vmetadata->>'name', '^\s*Produktname:\s*', '')
-                                         WHEN 'categories' THEN regexp_replace(chunk_text, '^\s*Kategorien:\s*', '')
-                                         WHEN 'reference_link' THEN regexp_replace(chunk_text, '^\s*Produk(t?)webseite:\s*', '')
-                                         END
+                                     chunk_text
                              ) AS info,
                              /* derive a stable sort key from the name */
-                             max(regexp_replace(vmetadata->>'name', '^\s*Produktname:\s*', ''))
+                             max(vmetadata->>'name')
                              FILTER (WHERE section = 'name') AS sort_name
                          FROM product_chunks
                          WHERE section IN ('name', 'categories', 'reference_link')
@@ -302,37 +322,49 @@ class Pipe:
         """
         query = """
                 WITH categories AS (
-                    SELECT product_id, substring(chunk_text FROM 'Kategorien: (.*)') AS category
+                    SELECT
+                        product_id,
+                        chunk_text AS category
                     FROM product_chunks
                     WHERE section = 'categories'
                 ),
-                     tags AS (
-                         SELECT product_id, unnest(string_to_array(substring(chunk_text FROM 'Schlagworte: (.*)'), ', ')) AS tag
+                     product_info AS (
+                         SELECT
+                             product_id,
+                             vmetadata->>'name' AS name,
+                             vmetadata->>'reference_link' AS reference_link
                          FROM product_chunks
-                         WHERE section = 'tags'
+                         WHERE section = 'name' OR section = 'reference_link'
+                     ),
+                     aggregated_products AS (
+                         SELECT
+                             product_id,
+                             MAX(name) AS name,
+                             MAX(reference_link) AS reference_link
+                         FROM product_info
+                         GROUP BY product_id
                      )
                 SELECT
-                    c.category,
-                    ARRAY_AGG(DISTINCT t.tag) AS tags
+                    c.category AS category,
+                    jsonb_agg(
+                            jsonb_build_object(
+                                    'name', ap.name,
+                                    'link', ap.reference_link
+                            )
+                    ) AS products
                 FROM categories c
-                         JOIN tags t ON t.product_id = c.product_id
+                         JOIN aggregated_products ap ON ap.product_id = c.product_id
+                WHERE c.category IS NOT NULL
+                  AND ap.name IS NOT NULL
+                  AND ap.reference_link IS NOT NULL
                 GROUP BY c.category
-                ORDER BY c.category \
+                ORDER BY c.category; \
                 """
         results = self.query_db(query, "all")
         # print(f"---------> results: {results}")
-        # categories = [f"{result['category']}" for result in results]
-
-        data = [
-            {"category": {result["category"]}, "tags": {tag for tag in result["tags"]}}
-            for result in results
-        ]
-
-        # print(f"---------> data: {data}")
-
         return {
             "prompt": self.valves.PROMPT_CATEGORIES,
-            "data": data,
+            "data": results,
         }
 
     def get_products_by_category(self, category: str):
@@ -374,11 +406,7 @@ class Pipe:
             return None
 
         return {
-            "prompt": (
-                self.valves.PROMPT_LIST
-                if len(results) > 1
-                else self.valves.PROMPT_DETAILS
-            ),
+            "prompt": self.valves.PROMPT_LIST_BY_PROPERTY,
             "data": [{**item["info"]} for item in results],
         }
 
@@ -390,113 +418,143 @@ class Pipe:
         For example, it searches for all available products in the category or database.
         """
 
-        print(f"---> get_products_by_property")
-        print(f"---> property: {property}")
-        print(f"---> objectives: {objectives}")
-        print(f"---> user_message: {user_message}")
+        # print(f"---> get_products_by_property")
+        # print(f"---> property: {property}")
+        # print(f"---> objectives: {objectives}")
+        # print(f"---> user_message: {user_message}")
 
         # Change search to tags instead of application area for better results
-        if property == "xxx_application_area":
-            query = """
-                    WITH objectives AS (
-                        /* normalize each objective term (passed as text[]) */
-                        SELECT ARRAY_AGG(trim(both from normalize_csv(o)::text)) AS oarr
-                        FROM unnest(%s::text[]) AS u(o)
-                    ),
-                         tags AS (
-                             /* extract & normalize tags from the 'tags' section rows */
-                             SELECT
-                                 pc.product_id,
-                                 ARRAY_AGG(trim(both from normalize_csv(t)::text)) AS ntags
-                             FROM (
-                                      SELECT
-                                          product_id,
-                                          unnest(
-                                                  string_to_array(
-                                                          regexp_replace(chunk_text, '^\s*Schlagworte:\s*', '', 'i'),
-                                                          ','
-                                                  )
-                                          ) AS t
-                                      FROM product_chunks
-                                      WHERE section = 'tags'
-                                  ) s
-                                      JOIN product_chunks pc USING (product_id)
-                             GROUP BY pc.product_id
-                         ),
-                         candidates AS (
-                             /* require that the product has a non-empty row for the requested section
-                                and at least one tag/objective intersection */
-                             SELECT DISTINCT pc.product_id
-                             FROM product_chunks pc
-                                      JOIN tags tg USING (product_id)
-                                      CROSS JOIN objectives o
-                             WHERE pc.section = 'tags'
-                               AND pc.chunk_text <> ''
-                               AND tg.ntags && o.oarr
-                         ),
-                         scored AS (
-                             SELECT
-                                 t.product_id,
-                                 /* how many objectives are present in tags */
-                                 (SELECT COUNT(*) FROM unnest(t.ntags) tt WHERE tt = ANY(o.oarr)) AS match_count
-                             FROM tags t
-                                      JOIN candidates c ON c.product_id = t.product_id
-                                      CROSS JOIN objectives o
-                         ),
-                         top AS (
-                             SELECT product_id
-                             FROM scored
-                             WHERE match_count > 0
-                             ORDER BY match_count DESC
-                             -- LIMIT 3
-                         )
-                    SELECT
-                        pc.product_id,
-                        jsonb_object_agg(
-                                pc.section,
-                                CASE section
-                                    WHEN 'name' THEN regexp_replace(vmetadata->>'name', '^\\s*Produktname:\\s*', '')
-                                    WHEN 'categories' THEN regexp_replace(chunk_text, '^\\s*Kategorien:\\s*', '')
-                                    WHEN 'reference_link' THEN regexp_replace(chunk_text, '^\\s*Produk(t?)webseite:\\s*', '')
-                                    WHEN 'application_area' THEN regexp_replace(chunk_text, '^\\s*Anwendungsbereich:\\s*', '')
-                                    WHEN 'tags' THEN regexp_replace(chunk_text, '^\\s*Schlagworte:\\s*', '')
-                                    END
-                        ) AS info
-                    FROM product_chunks pc
-                             JOIN top USING (product_id)
-                    WHERE pc.section IN ('name', 'tags', 'categories', 'application_area', 'reference_link')
-                    GROUP BY pc.product_id
-                    ORDER BY (SELECT match_count FROM scored s WHERE s.product_id = pc.product_id) DESC; \
-                    """
-            params = (objectives,)
-        else:
-            query = """
-                    SELECT
-                        product_id,
-                        jsonb_object_agg(
-                                section,
-                                chunk_text
-                        ) AS info
-                    FROM product_chunks
-                    WHERE product_id IN (
-                        SELECT product_id
-                        FROM product_chunks
-                        WHERE section = %s
-                          AND chunk_text <> ''
-                          AND abs(embedding <#> %s::vector) > 0.5
-                        ORDER BY abs(embedding <#> %s::vector) DESC
-                        LIMIT 3
-                    )
-                      AND section IN ('name', 'categories', %s, 'reference_link')
-                    GROUP BY product_id \
-                    """
+        # if property == "application_area":
 
-            # vector = self.get_embedding(" ".join(objectives))
-            vector = self.get_embedding(
-                user_message or objectives or "EMPTY_QUERY_SENTINEL"
+        query = """
+            SET hnsw.ef_search = 40;
+            SELECT set_limit(0.20); 
+            
+            WITH
+            q AS (
+              SELECT
+                normalize_csv(%s) AS qtags,
+                COALESCE(websearch_to_tsquery('german', NULLIF(%s,'')), to_tsquery('german','')) AS qtext,
+                %s::vector AS qvec,
+                %s as prop
+            ),
+            
+            -- 1) exact tag match: any overlap between query tags and stored tags
+            exact_tag AS (
+              SELECT DISTINCT p.product_id, 1.0 AS score
+              FROM product_chunks p, q
+              WHERE p.section = 'tags'
+                AND p.tags_arr && q.qtags
+            ),
+            
+            has_exact AS (
+              SELECT EXISTS(SELECT 1 FROM exact_tag) AS found
+            ),
+            
+            -- 2) scores per product (tags trigram + property dense & bm25)
+            scored AS (
+              SELECT
+                pid AS product_id,
+            
+                /* robust fuzzy tag score: plural/singular + typos */
+                (SELECT MAX(GREATEST(
+                          word_similarity(t, qt),                                    -- word-aware
+                          similarity(t, qt),                                         -- trigram
+                          1 - (levenshtein(t, qt)::float / GREATEST(length(t), length(qt)))  -- edit distance
+                       ))
+                 FROM unnest(any_value.tags_arr) AS t
+                 CROSS JOIN LATERAL unnest((SELECT qtags FROM q)) AS qt
+                ) AS s_tags,
+            
+                /* best property dense sim (cosine) */
+                (SELECT MAX(1 - (pa.embedding <=> (SELECT qvec FROM q)))
+                 FROM product_chunks pa, q
+                 WHERE pa.product_id = pid
+                   AND pa.section = (SELECT prop FROM q)  -- Fixed: use subquery instead of q.prop
+                   AND (SELECT qvec FROM q) IS NOT NULL
+                ) AS s_app_dense,
+            
+                /* best property BM25 */
+                (SELECT MAX(ts_rank_cd(pa2.app_tsv, (SELECT qtext FROM q)))
+                 FROM product_chunks pa2, q
+                 WHERE pa2.product_id = pid
+                   AND pa2.section = (SELECT prop FROM q)  -- Fixed: use subquery instead of q.prop
+                ) AS s_app_bm25
+            
+              FROM (
+                SELECT DISTINCT product_id AS pid,
+                       MAX(tags_arr) OVER (PARTITION BY product_id) AS tags_arr
+                FROM product_chunks pc, q
+                WHERE pc.section IN ('tags', (SELECT prop FROM q))  -- Fixed: use subquery
+              ) any_value
+            ),
+            
+            -- NORMALIZE EACH CHANNEL TO [0,1]
+            norm AS (
+              SELECT
+                product_id,
+                COALESCE((s_tags - MIN(s_tags) OVER())
+                         / NULLIF(MAX(s_tags) OVER() - MIN(s_tags) OVER(), 0), 0) AS n_tags,
+                COALESCE((s_app_dense - MIN(s_app_dense) OVER())
+                         / NULLIF(MAX(s_app_dense) OVER() - MIN(s_app_dense) OVER(), 0), NULL) AS n_app_dense,
+                COALESCE((s_app_bm25 - MIN(s_app_bm25) OVER())
+                         / NULLIF(MAX(s_app_bm25) OVER() - MIN(s_app_bm25) OVER(), 0), NULL) AS n_app_bm25
+              FROM scored
+            ),
+            
+            -- DYNAMIC WEIGHT RENORMALIZATION (only non-NULL channels count)
+            hybrid AS (
+              SELECT
+                product_id,
+                (
+                  COALESCE(0.60 * n_tags, 0) +
+                  COALESCE(0.25 * n_app_dense, 0) +
+                  COALESCE(0.15 * n_app_bm25, 0)
+                ) / NULLIF(
+                  (CASE WHEN n_tags      IS NOT NULL THEN 0.60 ELSE 0 END) +
+                  (CASE WHEN n_app_dense IS NOT NULL THEN 0.25 ELSE 0 END) +
+                  (CASE WHEN n_app_bm25  IS NOT NULL THEN 0.15 ELSE 0 END),
+                  0
+                ) AS score
+              FROM norm
+            ),
+            
+            -- FINAL SELECTION: exact matches first; otherwise, take top-K by hybrid (no hard 0.9 gate)
+            final_ids AS (
+              SELECT product_id, score FROM exact_tag
+              UNION ALL
+              SELECT h.product_id, h.score
+              FROM hybrid h, has_exact hx
+              WHERE NOT hx.found
+              -- AND score >= 0.8
+              ORDER BY score DESC
+              LIMIT 3
+            ),
+            
+            -- Get the property name for the final SELECT
+            prop_name AS (
+              SELECT prop FROM q LIMIT 1
             )
-            params = (property, vector, vector, property)
-
+            
+            SELECT jsonb_build_object(
+                'product_id', f.product_id,
+                'score', f.score,
+                'name', MAX(pc.chunk_text) FILTER (WHERE pc.section = 'name'),
+                'categories', MAX(pc.chunk_text) FILTER (WHERE pc.section = 'categories'),
+                pn.prop, MAX(pc.chunk_text) FILTER (WHERE pc.section = pn.prop),  -- Fixed: use prop_name CTE
+                'reference_link', MAX(pc.chunk_text) FILTER (WHERE pc.section = 'reference_link')
+            ) AS info
+            FROM final_ids f
+            CROSS JOIN prop_name pn
+            JOIN product_chunks pc
+              ON pc.product_id = f.product_id
+             AND pc.section IN ('name','tags','categories',pn.prop,'reference_link')  -- Fixed: use pn.prop
+            GROUP BY f.product_id, f.score, pn.prop
+            ORDER BY f.score DESC
+            LIMIT 3;
+        """
+        vec_query = self.get_embedding(user_message) if user_message else None
+        params = (",".join(objectives), user_message, vec_query, property)
         results = self.query_db(query, "all", params)
         # print(f"----> Results: {results}")
 
@@ -504,16 +562,8 @@ class Pipe:
             return None
 
         return {
-            "prompt": (
-                self.valves.PROMPT_LIST_BY_PROPERTY
-                # if len(results) > 1
-                # else self.valves.PROMPT_DETAILS
-            ),
-            "data": (
-                [{"product_info": row["info"]} for row in results]
-                # if len(results) > 1
-                # else results[0]["info"]
-            ),
+            "prompt": self.valves.PROMPT_LIST_BY_PROPERTY,
+            "data": [{"product_info": row["info"]} for row in results],
         }
 
     def get_product_details(self, product_name):
@@ -547,6 +597,7 @@ class Pipe:
                                   'name',
                                   'reference_link',
                                   'categories',
+                                  'combinable_with',
                                   'target_audience',
                                   'short_description',
                                   'product_details',
@@ -563,21 +614,43 @@ class Pipe:
         if not result:
             return None
 
-        # print(f"Produkt details: {result['product_info']}")
+        sql = """
+              SELECT jsonb_object_agg(
+                             pc.vmetadata->>'name',
+                             pc.chunk_text
+                     ) AS links
+              FROM product_chunks pc
+              WHERE pc.section = 'reference_link'
+                AND EXISTS (
+                  SELECT 1
+                  FROM unnest(normalize_csv(%s)) AS pat
+                  WHERE lower(pc.vmetadata->>'name') ILIKE pat || '%%'
+              ) \
+              """
+        res = self.query_db(sql, "one", (f"{result['combinable_with']}",))
+        links = res["links"] if res else None
 
+        # print(f"Combinable links: {links}")
+
+        cols = [
+            "name",
+            "reference_link",
+            "categories",
+            "combinable_with",
+            "target_audience",
+            "short_description",
+            "product_details",
+            "intake_recommendation",
+            "application_area",
+            "ingredients",
+            "hint",
+        ]
         return {
-            "prompt": self.valves.PROMPT_DETAILS,
-            "data": result,
+            "prompt": parse_template(self.valves.PROMPT_DETAILS, cols, result),
+            "data": {**result, "combinable_links": links},
         }
 
-    Property = Literal[
-        "target_audience",
-        "intake_recommendation",
-        "application_area",
-        "ingredients",
-        "formulation_origin",
-        "user_experience",
-    ]
+    Property = Literal[*product_properties]
 
     def get_product_property(self, property: Property, product_name=""):
         """
@@ -588,36 +661,32 @@ class Pipe:
         name = product_name or self.context_product.get("name", "")
 
         # print(f"-----> property: {property}")
-        # print(f"-----> context product: {self.context_product}")
-        # print(f"-----> name: {name}")
         # print(f"-----> product_name: {product_name}")
+        # print(f"-----> context product: {self.context_product}")
+        # print(f"---> Use product name: {name}")
 
         if not property or not name:
             return None
 
-        vector_property = self.get_embedding(property)
-        vector_name = self.get_embedding(f"Poduktname: {name}")
+        vector_name = self.get_embedding(name)
 
         query = """
                 SELECT jsonb_object_agg(
                                section,
-                               CASE section
-                                   WHEN 'name' THEN regexp_replace(chunk_text, '^\\s*Produktname:\\s*', '', 'i')
-                                   WHEN 'reference_link' THEN regexp_replace(chunk_text, '^\\s*Produk(t?)webseite:\\s*', '', 'i')
-                                   ELSE chunk_text
-                                   END
+                               chunk_text
                        )
                 FROM product_chunks
-                WHERE product_id IN (SELECT product_id
-                                     FROM product_chunks
-                                     WHERE section = 'name'
-                                     ORDER BY embedding <#> %s::vector
-                                     LIMIT 1)
-                  AND section in ('name', 'categories', %s, 'hint', 'reference_link') \
+                WHERE product_id IN (
+                    SELECT product_id
+                    FROM product_chunks
+                    WHERE section = 'name'
+                    ORDER BY embedding <#> %s::vector
+                    LIMIT 1)
+                  AND section in ('name', 'reference_link', 'categories', %s, 'hint') \
                 """
 
         result = self.query_db(query, "val", (vector_name, property))
-        # print(f"-----> Result: {result}")
+        # print(f"---> result: {result}")
 
         if not result:
             return None
@@ -626,9 +695,10 @@ class Pipe:
         # if product_name and self.context_product.get("name", "") != product_name:
         #     self.context_product = {"name": result["name"], "url": result["reference_link"]}
 
+        cols = ["name", "reference_link", "categories", property, "hint"]
         return {
-            "prompt": f"{self.valves.PROMPT_PROPERTY}",
-            "data": {**result},
+            "prompt": parse_template(self.valves.PROMPT_PROPERTY, cols, result),
+            "data": result,
         }
 
     def get_qna_answer(self, user_message):
@@ -662,7 +732,7 @@ class Pipe:
         return {
             "prompt": self.valves.PROMPT_QNA,
             "data": {
-                "name": self.context_product.get("name", "") or "Ethno Health",
+                "name": self.context_product.get("name", ""),
                 "reference_link": self.context_product.get("url", "")
                                   or "https://www.ethno-health.com",
                 "answer": result,
@@ -709,7 +779,7 @@ class Pipe:
                 assistant_message = message.get("content", "")
                 # print(f"\n-----> Assistant message: {assistant_message}\n\n")
 
-                pattern = r"\[([äöüßÄÖÜa-zA-Z0-9\s\-\.!]+)\]\((https://[^\s)]+)\)"
+                pattern = r"^\[([äöüßÄÖÜa-zA-Z0-9\s\-\.!]+)\]\((https://[^\s)]+)\)"
                 name = None
                 url = None
 
@@ -730,11 +800,11 @@ class Pipe:
 
             elif message.get("role", "") == "user":
                 user_message = message.get("content", "")
-                # user_message = (
-                #     sanitize_user_input(user_message)
-                #   if user_message
-                #   else "EMPTY_QUERY_SENTINEL"
-                # )
+                user_message = (
+                    sanitize_user_input(user_message)
+                    if user_message
+                    else "EMPTY_QUERY_SENTINEL"
+                )
                 # print(f"-----> User message: {user_message}")
 
         # Define variables for LLM
@@ -755,10 +825,12 @@ class Pipe:
                     "name": "get_product_list",
                     "description": """
                     Queries the PostgreSQL DB for a list of all available products.
+                    Use ONLY if the user clearly refers to multiple products and no parameters are defined in the user query.
 
                     Examples:
                     - Welche Produkte habt ihr in Sortiment?
                     - Welche Arten von Produkten habt ihr?
+                    - Welche Produkte gibt es?
                     
                     """,
                 },
@@ -783,14 +855,17 @@ class Pipe:
                     "name": "get_products_by_category",
                     "description": f"""
                     Fetches a list of products in the category.
+                    Default for the category parameter.
+                    Use ONLY if the user clearly refers to multiple products.
                     
-                    You **must** extract the category name from the user message.
-                    You **must** take only one most suitable category name from this list: {', '.join(categories)}
+                    You must extract the category name from the user message.
+                    You must take only one most suitable category name from this list: {', '.join(categories)}
 
                     Examples:
                     – Welche Produkte gibt es in der Kategorie Körper & Reinigung?
                     – Zeig mir die Produkte aus der Kategorie Vitalität & Familie.
                     – Was gibt es in der Kategorie Omega-Öle?
+                    - Zeig mir Produkte von Body & Clean.
 
                     """,
                     "parameters": {
@@ -813,42 +888,32 @@ class Pipe:
                     "description": f"""
                     Fetches a list of the most relevant products for the user's request.
 
-                    Use it **ONLY** if the query applies to **many** products.
-                    Use it if the 'Ethno Health' string is in the user message.
+                    Use ONLY if the user clearly refers to multiple products.
+                    DO NOT use if the message contains singular cues: “das Produkt”, “dieses Produkt”, “mein Produkt”, “das Präparat”, or anaphora referring to a single earlier product.
                     
                     You **must** extract product property from the user message.
-                    You **must** take only one most suitable property from this list: {'; '.join(product_properties)}
+                    You **must** take only one most suitable property from this list: "target_audience", "application_area", "ingredients", "formulation_origin", "user_experience"
 
-                    You **must** extract the query **objectives** from the user message. This must be one or 
-                    max two words, indicating the user's search subject.
-                    You find objectives in the square brackets in these examples:
-
-                    Property "target audience":
-                    - Welche Produkte sind am besten für [Sportler] geeignet?
-
-                    Property "ingredients":
-                    - Welche Produkte enthalten [Omega-3]?
-                    - Gibt es [Proteinpräparate]?
-                    - Bei welchen Produkten gibt's [Proteine]?
-
-                    Property "application area":
-                    - Welches Produkt hilft bei [Allergien]?
-                    - Welche Produkte sind wirksam gegen [Husten]?
-                    - Was haben Sie gegen [Durchfall]?
-                    - Haben Sie Produkte für [Klarheit] und [Konzentration]?
-                    - Gibt es Produkte für die Unterstützung der [Darmgesundheit]?
-                    - Welche Produkte unterstützen beim [Lernen]?
-
-                    Property "formulation origin":
-                    - Welche Produkte wurden in [Tibet] hergestellt?
-                    - [Wo] kommt das Produkt [her]?
-                    - [Woher] kommt die Rezeptur?
-                    - Was ist das Besondere an dieser [Rezeptur]?
-
-                    Property "user experience":
-                    - [Was sagen die Menschen] über Ethno Health Produkte?
-                    - [Was sagen die Leute] über die Produkte?
-                    - Gibt es [Erfolgstorys]?
+                    You **must** extract the query **objectives** from the user message. This must be one or max two words, indicating the user's search subject.
+                    
+                    Examples:
+                    - Welche Produkte sind am besten für Sportler geeignet? --> target_audience
+                    - Welche Produkte enthalten Omega-3? --> ingredients
+                    - Gibt es Proteinpräparate? --> ingredients
+                    - Bei welchen Produkten gibt's Proteine? --> ingredients
+                    - Welche Produkte helfen bei Allergien? --> application_area
+                    - Welche Produkte sind wirksam gegen Husten? --> application_area
+                    - Was haben Sie gegen Arthrose? --> application_area
+                    - Haben Sie Produkte für Klarheit und Konzentration? --> application_area
+                    - Gibt es Produkte für die Unterstützung der Darmgesundheit? --> application_area
+                    - Welche Produkte unterstützen beim Lernen? --> application_area
+                    - Welche Produkte wurden in Tibet hergestellt? --> formulation_origin
+                    - Wo kommt das Produkt her? --> formulation_origin
+                    - Woher kommt die Rezeptur? --> formulation_origin
+                    - Was ist das Besondere an dieser Rezeptur? --> formulation_origin
+                    - Was sagen die Menschen über Ethno Health Produkte? --> user experience
+                    - Was sagen die Leute über die Produkte? --> user experience
+                    - Gibt es Erfolgstorys? --> user experience
 
                     """,
                     "parameters": {
@@ -883,11 +948,11 @@ class Pipe:
                     You must extract the product name from the user message.
                     You must take the most suitable name from this list: {', '.join(product_names)}
 
-                    You find product names in the square brackets in these examples:
-                    – Was weisst du über das [Lung] Produkt?
-                    – Welche Informationen gibt es über [Brenner]?
-                    – Was ist das [Omega Go!] Produkt?
-                    - Was ist [Gehirnkraft]?
+                    Examples:
+                    – Was weisst du über das Lung Produkt?
+                    – Welche Informationen gibt es über Brenner?
+                    – Was ist das Omega Go! Produkt?
+                    - Was ist Gehirnkraft?
 
                     DO NOT use this function if you can't extract the product name.
                     
@@ -916,25 +981,23 @@ class Pipe:
                     You **must** extract the product property from the user message.
                     You **must** take only the property from this list: {', '.join(product_properties)}
 
-                    **DO NOT** use it if the extracted property is NOT in the list above!
-                    **DO NOT** use it if there is "Etho Health" substrin in the user query.
-                    
-                    Do not use it if the 'Ethno Health' string is in the user message.
-                    Extract the product name from the user message if given.
+                    Product_name is optional. If the user did not name a product but uses anaphora (e.g., ‘das Produkt’, ‘dieses Produkt’), call this function without product_name.
+                    Call this function without the product name, if the product name does not explicitly exist in the user query.
 
-                    User request examples:
+                    Examples:
                     - Was ist da drin?
                     - Welche Inhaltsstoffe hat das Produkt
                     - Welche Zutaten hat das Produkt
                     - Für was ist das Produkt gut?
-                    - Kann das Lung gegen Konzentrastionsstörungen helfen?
+                    - Kann das Produkt gegen Konzentrastionsstörungen helfen?
                     - Für wen ist das Produkt gedacht?
                     - Was sagen die Leüte über das produkt?
                     - Welche Erfolgsgeschichten gibt's bei daily zenergy?
                     - Wie ist das Produkt entstanden?
                     - Wer hat das Produkt erfunden?
                     - Wie soll ich das Produkt einnehmen?
-                    - Wie verwendet man das Lung produkt?
+                    - Wie verwendet man das Produkt produkt?
+                    - Sind die Inhaltsstoffe rein pflanzlich?
 
                     """,
                     "parameters": {
@@ -961,12 +1024,15 @@ class Pipe:
                     "name": "get_qna_answer",
                     "description": f"""
                     Queries the PostgreSQL Q&A database for the related answer to questions **not directly** connected to the product properties.
+                    Default for general, NOT product-related questions.
 
-                    **DO NOT** use it when the user message contains references to the product properties from this list:
-                    {', '.join(product_properties)}
+                    DO NOT use it when the user message contains references:
+                    - to the product properties from this list: {', '.join(product_properties)}
+                    - to the product names from this list: {', '.join(product_names)}
+                    - to the product categories from this list: {', '.join(categories)}
 
-                    Use it when the user asks about:
-                    - Etho Health
+                    Acceptable themes and keywords:
+                    - Etho Health and Etho Health Produkte
                     - Mentora
                     - Einnahme von Medikamenten
                     - Schwangerschaft
@@ -992,7 +1058,6 @@ class Pipe:
                     - Darf ich das Produkt nutzen, wenn ich andere Medikamenten einnehme?
                     - Kann ich das produkt während der Schwangerschaft konsumieren?
                     - Gibt es Kontraindikationen bei der Einnahme vom Produkt?
-                    - Wie wirken sich essence aminos auf die Haut während der Schwangerschaft aus?
                     - Kann ich das Produkt während der Schwangerschaft einnehmen?
                     - Können schwangere Frauen Ethno Health-Produkte verwenden?
                     - Kann das Produkt während der Einnahme von Medikamenten eingenommen werden?
@@ -1000,8 +1065,6 @@ class Pipe:
                     - Ist das Produkt vegan und welche Qualitätsmerkmale werden genannt?
                     - Was macht die hochwertigen, natürlichen Inhaltsstoffe von Ethno Health so besonders wirksam für das tägliche Wohlbefinden?
                     - Inwiefern profitieren Vegetarier und Veganer von der umfassenden Produktpalette, die Ethno Health anbietet?
-                    - Mit welchen Routinen lässt sich Lung gut kombinieren?
-                    - Welche Produkte lassen sich gut mit Lung kombinieren?
                     - Was ist Mentora?
                     """,
                     "parameters": {
@@ -1042,11 +1105,13 @@ USE *EXACTLY* THIS SCHEMA:
 Here are acceptable examples:
 
 {"name":"get_product_list","arguments":{}}
-{"name":"get_products_by_property", "arguments":{"property": "target_audience", "objectives": ["Sportler"], "user_message": "Für wen ist das Produkt gut?"}
-{"name":"get_product_details","arguments":{"product_name":"Lung"}}
+{"name":"get_product_details","arguments":{"product_name": "Lung"}}
 {"name":"get_product_property","arguments":{"property": "ingredients"}}
-{"name":"get_product_property","arguments":{"property": "target_audience", "product_name": "Burner"}}
-{"name":"get_disclaimer","arguments":{}}
+{"name":"get_product_property","arguments":{"property": "target_audience", "product_name": ""}}
+{"name":"get_product_property","arguments":{"property": "application_area", "product_name": "Omega 3 plus"}}
+{"name":"get_products_by_property", "arguments":{"property": "target_audience", "objectives": ["Sportler"], "user_message": "Für wen ist das Produkt gut?"}
+{"name":"get_products_by_property", "arguments":{"property": "application_area", "objectives": ["Allergie"], "user_message": ""}
+{"name":"get_qna_answer","arguments":{"user_message": "Sind die Produkte von Ethno Health vegetarisch?"}}
 
 Begin your response now in this JSON-only format.
         """
@@ -1085,6 +1150,7 @@ Begin your response now in this JSON-only format.
         print(f"- User: {__user__['name']}")
         print(f"- Model: {response.model}")
         print(f"- User message: {user_message}")
+        print(f"- Context product: {self.context_product}")
         print("------------------------------------------------")
 
         ### Statistic
@@ -1101,7 +1167,7 @@ Begin your response now in this JSON-only format.
             print(f"- Prompt tokens: {response.usage.prompt_tokens}")
             print(f"- Total tokens: {response.usage.total_tokens}")
 
-        print(f"Function search response: {response}")
+        # print(f"Function search response: {response}")
 
         function_name = ""
         arguments = {}
@@ -1140,6 +1206,9 @@ Begin your response now in this JSON-only format.
                         arguments = value["arguments"]
                         break
 
+        print(f"- Function name: {function_name}")
+        print(f"- Arguments: {arguments}")
+
         if function_name in handlers:
             db_query_start = time.perf_counter()
             result = handlers[function_name](**arguments)
@@ -1147,9 +1216,6 @@ Begin your response now in this JSON-only format.
         else:
             return response
 
-        print(f"- Context product: {self.context_product}")
-        print(f"- Function name: {function_name}")
-        print(f"- Arguments: {arguments}")
         print("================================================")
         print(f"Tool search time: {duration:.1f} s")
         print(f"DB query duration: {end_time - db_query_start:.1f} s")
@@ -1161,12 +1227,13 @@ Begin your response now in this JSON-only format.
         if result:
             prompt = result.get("prompt", "")
             data = result.get("data", "")
-            context = f"Context: \n\n{data}\n\n"
-            user_content = (
-                f"{context}Render all products from the context.\n\n"
-                if isinstance(data, list)
-                else f"{context}{user_message}\n\n"
-            )
+            context = f"\n\n<context>\n{data}\n</context>\n\n"
+            user_content = f"{context}{prompt}{user_message}\n\n"
+            # (
+            #     f"{context}Render all products from the context.\n\n"
+            #     if isinstance(data, list) and len(data)
+            #     else f"{context}{user_message}\n\n"
+            # )
             print(f"Function call result: {result.get('data', '')}")
             print("================================================")
 
@@ -1180,11 +1247,7 @@ Begin your response now in this JSON-only format.
             {
                 "role": "system",
                 "content": f"""                
-                Username: {username}                
-                
-                {system_message}
-                
-                {prompt}
+                {parse_template(system_message, ["username"], {"username": username})}
                 """,
             },
             {
@@ -1228,6 +1291,7 @@ Begin your response now in this JSON-only format.
                         print(f"- Prompt tokens: {chunk.usage.prompt_tokens}")
                         print(f"- Completion tokens: {chunk.usage.completion_tokens}")
                         print(f"- Total tokens: {chunk.usage.total_tokens}")
+                    break
 
                 response = choice.delta.content or ""
                 # print(f"Response: {response}")

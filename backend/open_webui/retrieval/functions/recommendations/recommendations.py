@@ -1,10 +1,24 @@
 import json
+import psycopg2
 import re
+import requests
 import time
+import numpy as np
 from typing import Literal
+from functools import partial
 
 from openai import OpenAI
+from psycopg2.extras import RealDictCursor
 from pydantic import BaseModel, Field
+
+from open_webui.retrieval.functions.utils import (
+    query_db,
+    get_user_name_from_full_name,
+    get_embedding,
+    sanitize_user_input,
+)
+
+from open_webui.retrieval.functions.data import recommendation_tags
 
 
 class Pipe:
@@ -27,39 +41,79 @@ class Pipe:
             default="qwen/qwen-2.5-7b-instruct",
             description="Model to use for the tools selection.",
         )
-        EMBEDDING_MODEL_ID: str = Field(
-            default="bge-m3",
+        API_BASE_URL: Literal["http://localhost:11434/api",] = Field(
+            default="http://localhost:11434/api",
+            description="Base URL for accessing Ollama API endpoints.",
+        )
+        OPENAI_API_BASE_URL: Literal[
+            "https://openrouter.ai/api/v1",
+            "https://api.novita.ai/v3/openai",
+            "https://api.openai.com/v1",
+        ] = Field(
+            default="https://openrouter.ai/api/v1",
+            description="OpenAI API URL.",
+        )
+        OPENAI_API_KEY: str = Field(
+            default="",
+            description="OpenAI API key.",
+        )
+        EMBEDDING_MODEL_ID: Literal[
+            "baai/bge-m3",
+            "gpt-4.1-nano-2025-04-14",
+        ] = Field(
+            default="baai/bge-m3",
             description="Model to use for embedding generation.",
         )
+        EMBEDDING_API_BASE_URL: Literal[
+            "https://api.novita.ai/openai/v1",
+            "https://api.openai.com/v1",
+        ] = Field(
+            default="https://api.novita.ai/openai/v1",
+            description="OpenAI API URL.",
+        )
+        EMBEDDING_API_KEY: str = Field(
+            default="",
+            description="Embedding API key.",
+        )
+
         PROMPT: str = Field(
             default="""
 
             INSTRUCTIONS:
             - You **must** replace "Username" with the user name taken from the Username.
+            - - **Headings and other separated formats are forbidden.**
             - You **must** render everything in Markdown format, **NO HTML, no additional quotemarks!**
             - You must always create the following sections using the JSON object from the Context:
               1. Tags
               2. Relevanz
-              2. Empfohlene Produkte
-              3. Weitere Empfehlungen
-              4. Anwendungsbereich
+              3. Empfohlene Produkte
+              4. Weitere Empfehlungen
+              5. Anwendungsbereich
+              6. New section with "---"
+              7. Mentora Pro Tipp (can be empty)
             
             - Take "Tags" from the "tags" JSON field. Always render them in cursive (*italic*).
-            - Take "Relevanz" from the "score" JSON field.
+            - Take "Relevanz" from the "score" JSON field. Always convert it to a percent.
             - Take "Empfohlene Produkte" from the "recommended" JSON field.
             - Take "Weitere Empfehlungen" from the "suitable" JSON field.
             - Take "Anwendungsbereich" from the "info" JSON field. Use this field to create a full relevant answer.
+            - You must always take "Mentora Pro Tipp" from the "hint" JSON field. DO NOT invent, alter, assume, or extend beyond the context. If the context does not contain a hint, explicitly state: "kein Tipp".
 
             - Render every section as a separate paragraph with the section name in bold (**Tags:**).
             - Always render "Tags" section content in *italic*
             - Always render the content of these sections as text, **no lists or bullet points**!
 
             - For the sections "Empfohlene Produkte", "Weitere Empfehlungen":
-              1. Always render every product name as the product link.
-              2. Take every product name and find its link by product name in the JSON "links" object.
+              1. You must render every product name as the product link.
+              2. You must take every product name and find its link by product name in the JSON "links" object.
+              3. Altering or changing the product name or link is strictly forbidden.
+
+            - For the "Mentora Pro Tipp" section:
+              1. Render "Mentora Pro Tipp 💡:" section name before the content.
+              3. NEVER render a product link in this section.
 
             """,
-            description="Instruction how render content.",
+            description="Instructions on how to render content.",
         )
         PROMPT_NOTHING_FOUND: str = Field(
             default="""
@@ -76,22 +130,6 @@ class Pipe:
         TEMPLATE_FOOTER: str = Field(
             default="\n\n---\n\n*Bitte beachte, dass **alle** Produkte nicht zur Heilung oder Behandlung von Krankheiten dienen!*\n\n",
             description="Footer template (disclaimer).",
-        )
-        API_BASE_URL: Literal["http://localhost:11434/api",] = Field(
-            default="http://localhost:11434/api",
-            description="Base URL for accessing Ollama API endpoints.",
-        )
-        OPENAI_API_BASE_URL: Literal[
-            "https://openrouter.ai/api/v1",
-            "https://api.novita.ai/v3/openai",
-            "https://api.openai.com/v1",
-        ] = Field(
-            default="https://openrouter.ai/api/v1",
-            description="OpenAI API URL.",
-        )
-        OPENAI_API_KEY: str = Field(
-            default="",
-            description="OpenAI API key.",
         )
 
         # PostgreSQL connection configuration
@@ -115,17 +153,187 @@ class Pipe:
     def __init__(self):
         self.valves = self.Valves()
 
+        self.query_db = partial(query_db, self)
+        self.get_user_name_from_full_name = partial(get_user_name_from_full_name, self)
+        self.get_embedding = partial(get_embedding, self)
+        self.sanitize_user_input = partial(sanitize_user_input, self)
+
+    def get_recommendation(self, tags, user_message=""):
+        """Queries the PostgreSQL Q&A database for the given tag(s)"""
+
+        # print(
+        # f"--------> User message: {sanitize_user_input(user_message) or 'EMPTY_QUERY_SENTINEL'}"
+        # )
+        # print(f"---> tags: {tags}")
+        vec_query = (
+            # Make a fallback for the empty user message
+            self.get_embedding(
+                sanitize_user_input(user_message)
+                if user_message
+                else "EMPTY_QUERY_SENTINEL"
+            )
+        )
+
+        # Get recommendation
+        sql = """
+            SET hnsw.ef_search = 40;
+            
+            WITH
+            q AS (
+              SELECT
+                %s::vector AS qvec,
+                websearch_to_tsquery('german', %s) AS qtext,
+                normalize_csv(%s) AS qtags
+            ),
+            
+            -- 1) Exact tag short-circuit
+            exact_tag AS (
+              SELECT p.id, 1.0 AS score
+              FROM product_recommendations p, q
+              WHERE p.tags_arr && q.qtags
+            ),
+            has_exact AS (
+              SELECT EXISTS(SELECT 1 FROM exact_tag) AS found
+            ),
+            
+            -- 2) Score all rows
+            scored_all AS (
+              SELECT
+                p.id,
+                COALESCE(1 - (p.vec_info <=> (SELECT qvec FROM q)), 0) AS s_info_dense,
+                ts_rank_cd(p.info_tsv, (SELECT qtext FROM q))           AS s_info_bm25,
+                (
+                  SELECT MAX(similarity(t, qt))
+                  FROM unnest(p.tags_arr) t
+                  CROSS JOIN LATERAL unnest((SELECT qtags FROM q)) qt
+                )                                                       AS s_tags_trgm
+              FROM product_recommendations p
+            ),
+            
+            -- 3) Normalize (NULL-safe for channels that might be missing)
+            norm AS (
+              SELECT
+                id,
+                COALESCE(
+                  (s_info_dense - MIN(s_info_dense) OVER())
+                  / NULLIF(MAX(s_info_dense) OVER() - MIN(s_info_dense) OVER(), 0), 0
+                ) AS n_info_dense,
+                COALESCE(
+                  (s_info_bm25 - MIN(s_info_bm25) OVER())
+                  / NULLIF(MAX(s_info_bm25) OVER() - MIN(s_info_bm25) OVER(), 0), 0
+                ) AS n_info_bm25,
+                COALESCE(
+                  (s_tags_trgm - MIN(s_tags_trgm) OVER())
+                  / NULLIF(MAX(s_tags_trgm) OVER() - MIN(s_tags_trgm) OVER(), 0), 0
+                ) AS n_tags_trgm
+              FROM scored_all
+            ),
+            
+            -- 4) Weighted hybrid
+            hybrid AS (
+              SELECT id, 0.5*n_info_dense + 0.35*n_info_bm25 + 0.15*n_tags_trgm AS score
+              FROM norm
+            ),
+            
+            -- 5) Final selection
+            final_ids AS (
+              SELECT id, score FROM exact_tag
+              UNION ALL
+              SELECT h.id, h.score
+              FROM hybrid h, has_exact hx
+              WHERE NOT hx.found
+                AND h.score >= 0.9
+            )
+            SELECT p.id, p.tags, p.recommended, p.suitable, p.info, f.score
+            FROM final_ids f
+            JOIN product_recommendations p ON p.id = f.id
+            WHERE f.score > 0.8
+            ORDER BY f.score DESC
+            LIMIT 1;
+        """
+        result = self.query_db(sql, "one", (vec_query, user_message, tags))
+
+        # Get product links for recommended products
+        sql = """
+              SELECT jsonb_object_agg(
+                             regexp_replace(pc.vmetadata->>'name', '^\\s*Produktname:\\s*', ''),
+                             regexp_replace(pc.chunk_text, '^\\s*Produk(t?)webseite:\\s*', '')
+                     ) AS links
+              FROM product_chunks pc
+              WHERE pc.section = 'reference_link'
+                AND EXISTS (
+                  SELECT 1
+                  FROM unnest(normalize_csv(%s)) AS pat
+                  WHERE lower(regexp_replace(pc.vmetadata->>'name', '^\s*Produktname:\s*', '')) ILIKE pat || '%%'
+              ) \
+              """
+
+        if not result:
+            return None
+
+        res = self.query_db(
+            sql, "one", (f"{result['recommended']}, {result['suitable']}",)
+        )
+        links = res["links"] if res else None
+        # info = res["info"] if res else None
+
+        # print(f"-----> Info: {info}")
+        # print(f"-----> Links: {links}")
+        # print(f"-----> Result: {res}")
+
+        return {**result, "links": links}
+
+    tools_schema = [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_recommendation",
+                "description": f"""
+                Fetches a list of the most relevant recommendations for given tags.
+                
+                Tag list: {', '.join(recommendation_tags)}
+
+                You **must** extract the tags from the user message. These must be one 
+                or two most related words, indicating the user's ailment, illness, diagnosis, or health complaint.
+                You find tags in the examples in the square brackets.
+                You **must** take one or two most related tags from the tag list above.
+
+                Examples:
+                - Was könnt ihr gegen [Ängste] empfehlen?
+                - Welche Produkte helfen bei [Allergie]?
+                - Ich habe Probleme mit [Augen].
+
+                """,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "tags": {
+                            "type": "string",
+                            "description": "The tag from the list extracted from the user message",
+                            "enum": recommendation_tags,
+                        },
+                        "user_message": {
+                            "type": "string",
+                            "description": "User message",
+                        },
+                    },
+                    "required": ["tags"],
+                },
+            },
+        },
+    ]
+
     system_prompt_tools = (
-        """
-        You are the Ethon Health product assistant.
-        You recommend the products based on the user's request.
-        Respond *only* with valid JSON, no explanations.
-        
-        You have access to the following tools:
-        
-        """
-        + json.dumps(tools_schema)
-        + """
+            """
+            You are the Ethon Health product assistant.
+            You recommend the products based on the user's request.
+            Respond *only* with valid JSON, no explanations.
+            
+            You have access to the following tools:
+            
+            """
+            + json.dumps(tools_schema)
+            + """
         
         USE *EXACTLY* THIS SCHEMA:
         {
@@ -144,7 +352,7 @@ class Pipe:
         """
     )
 
-    ### --- PIPE functon ---
+    ### --- PIPE funciton ---
     def pipe(self, body: dict, __user__: dict):
         """
         Uses the provided body to query the PostgreSQL database and then call the Chat Completion endpoint.
@@ -154,11 +362,17 @@ class Pipe:
         print(f"pipe: {__name__}")
         # print(f"\nBody: {body}\n")
 
-        openai = OpenAI(
+        self.openai = OpenAI(
             base_url=self.valves.OPENAI_API_BASE_URL,
             api_key=self.valves.OPENAI_API_KEY,
         )
 
+        self.embedding = OpenAI(
+            base_url=self.valves.EMBEDDING_API_BASE_URL,
+            api_key=self.valves.EMBEDDING_API_KEY,
+        )
+
+        # Extract the user's first name to use in answers
         username = self.get_user_name_from_full_name(__user__["name"])
 
         # Extract the product from the last message.
@@ -191,7 +405,7 @@ class Pipe:
 
         start_time = time.perf_counter()
 
-        response = openai.chat.completions.create(
+        response = self.openai.chat.completions.create(
             model=self.valves.TOOLS_MODEL_ID,
             messages=messages,
             stream=False,
@@ -248,9 +462,9 @@ class Pipe:
             elif "items" in content:
                 for key, value in content.items():
                     if (
-                        isinstance(value, dict)
-                        and "name" in value
-                        and "arguments" in value
+                            isinstance(value, dict)
+                            and "name" in value
+                            and "arguments" in value
                     ):
                         function_name = value["name"]
                         arguments = value["arguments"]
@@ -287,9 +501,9 @@ class Pipe:
                 "role": "system",
                 "content": f"""
                 Username: {username}
-                Context:\n\n{result}
-                {system_message}
-                {self.valves.PROMPT if result else f"{self.valves.PROMPT_NOTHING_FOUND}"}
+                Context:\n\n{result}\n\n
+                {system_message}\n\n
+                {self.valves.PROMPT if result else f"{self.valves.PROMPT_NOTHING_FOUND}"}\n\n
                 """,
             },
             {
@@ -304,12 +518,12 @@ class Pipe:
             start_time = time.perf_counter()
             first_chunk = True
 
-            for chunk in openai.chat.completions.create(
-                model=self.valves.RAG_MODEL_ID,
-                messages=messages,
-                stream=True,
-                temperature=body.get("temterature", 0),
-                top_p=body.get("top_p", 0.1),
+            for chunk in self.openai.chat.completions.create(
+                    model=self.valves.RAG_MODEL_ID,
+                    messages=messages,
+                    stream=True,
+                    temperature=body.get("temterature", 0),
+                    top_p=body.get("top_p", 0.1),
             ):
                 # print(f"---> chunk: {chunk}")
                 if first_chunk:

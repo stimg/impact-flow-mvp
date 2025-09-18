@@ -14,7 +14,7 @@ from open_webui.utils.auth import get_verified_user
 from psycopg2.extras import RealDictCursor
 from sqlalchemy import text
 
-from open_webui.retrieval.functions.data import questions
+from open_webui.retrieval.functions.data import questions, mentora_hints
 
 
 def get_user_name_from_full_name(self, username: str | None) -> str:
@@ -36,7 +36,7 @@ def sanitize_user_input(text: str, strict: bool = True) -> str:
 
     # Strict Mode Regex: erlaubt nur Buchstaben, Ziffern, Satzzeichen, Whitespace
     # Satzzeichen: . , ; : ! ? ( ) - ' " … und Leerzeichen/Tab/Zeilenumbruch
-    re_strict = re.compile(r"[^a-zA-Z0-9äöüÄÖÜß .,;:!?()'\"\-\n\r\t]")
+    re_strict = re.compile(r"[^a-zA-Z0-9äöüÄÖÜß& .,;:!?()'\"\-\n\r\t]")
 
 
 # 1) HTML-Tags entfernen
@@ -64,16 +64,12 @@ def sanitize_user_input(text: str, strict: bool = True) -> str:
     if strict:
         clean = re_strict.sub("", clean)
 
-    return clean
+    return clean.replace("ß", "ss")
 
 def get_embedding(self, text=""):
-    # Return zero vector on empty text
-    if not text:
-        return [] * 1024
-
     response = self.embedding.embeddings.create(
         model=self.valves.EMBEDDING_MODEL_ID,
-        input=text,
+        input=text or "EMPTY_QUERY_SENTINEL",
     )
 
     return response.data[0].embedding
@@ -217,3 +213,35 @@ def get_follow_ups(model: str, count=3):
     follow_ups = [question_set[random.randrange(qn)] for _ in range(count)]
 
     return follow_ups
+
+def parse_template(tpl: str, cols: List[str], data: dict):
+    for col in cols:
+        # print(f"---> col: {col} ({col.upper()})")
+        # print(f"---> data[col]: {data[col]}")
+        if col == "hint":
+            hl = len(mentora_hints)
+            hint = data["hint"] or mentora_hints[random.randrange(hl)]
+            tpl = tpl.replace("{{MENTORA_PRO_HINT}}", hint)
+        else:
+            tpl = tpl.replace(f"{{{{{col.upper()}}}}}", data[col])
+
+    # print(f"PARSED TEMPLATE: {tpl}")
+
+    return tpl
+
+def string_to_array(s: str) -> list[str]:
+    seen = set()
+    arr = []
+    for item in s.split(","):
+        tag = item.strip()
+        if tag and tag not in seen:
+            arr.append(tag)
+            seen.add(tag)
+    return arr
+
+
+def normalize_tags(tags: str) -> str:
+    return ",".join(string_to_array(tags)).lower()
+
+def cleanup_csv(s: str) -> str:
+    return ", ".join(string_to_array(s))

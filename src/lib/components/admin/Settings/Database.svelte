@@ -129,24 +129,24 @@
 
     const getProductMetadata = (): Omit<Product, 'id'> => ({
         name: product_name,
-        categories: `${$i18n.t('Categories')}: ${categories}`,
+        categories: categories,
         tags: tags || '',
         similar_products: similar_products || '',
         recommended_products: recommended_products || '',
         supporting_products: supporting_products || '',
         combinable_with: combinable_with || '',
-        short_description: short_description ? `${$i18n.t('Short description')}: ${short_description}` : '',
-        product_details: product_details ? `${$i18n.t('Product details')}: ${product_details}` : '',
-        target_audience: target_audience ? `${$i18n.t('Target audience')}: ${target_audience}` : '',
-        intake_recommendation: intake_recommendation ? `${$i18n.t('Intake recommendation')}: ${intake_recommendation}` : '',
-        application_area: application_area ? `${$i18n.t('Application area')}: ${application_area}` : '',
-        ingredients: ingredients ? `${$i18n.t('Ingredients')}: ${ingredients}` : '',
-        formulation_origin: formulation_origin ? `${$i18n.t('Formulation origin')}: ${formulation_origin}` : '',
-        history: history ? `${$i18n.t('History')}: ${history}` : '',
-        hint: prod_hint,
-        user_experience: user_experience ? `${$i18n.t('User experience')}: ${user_experience}` : '',
+        short_description: short_description || '',
+        product_details: product_details || '',
+        target_audience: target_audience || '',
+        intake_recommendation: intake_recommendation || '',
+        application_area: application_area || '',
+        ingredients: ingredients || '',
+        formulation_origin: formulation_origin || '',
+        history: history || '',
+        user_experience: user_experience || '',
         source: source ? source : '',
         reference_link: reference_link ? reference_link : '',
+        hint: prod_hint,
     })
 
     const getQNAMetadata = () => ({
@@ -166,23 +166,23 @@
     const setProductData = (product: Product) => {
         product_id = product.id;
         product_name = product.name;
-        categories = product.categories.replace(`${$i18n.t('Categories')}: `, '');
-        tags = product.tags || '';
-        similar_products = product.similar_products?.replace(`${$i18n.t('Similar products')}: `, '') || '';
-        recommended_products = product.recommended_products?.replace(`${$i18n.t('Recommended products')}: `, '') || '';
-        supporting_products = product.supporting_products?.replace(`${$i18n.t('Supporting products')}: `, '') || '';
-        combinable_with = product.combinable_with?.replace(`${$i18n.t('Combinable with products')}: `, '') || '';
-        short_description = product.short_description.replace(`${$i18n.t('Short description')}: `, '');
-        product_details = product.product_details?.replace(`${$i18n.t('Product details')}: `, '') || '';
-        target_audience = product.target_audience?.replace(`${$i18n.t('Target audience')}: `, '') || '';
-        intake_recommendation = product.intake_recommendation.replace(`${$i18n.t('Intake recommendation')}: `, '');
-        application_area = product.application_area?.replace(`${$i18n.t('Application area')}: `, '') || '';
-        ingredients = product.ingredients.replace(`${$i18n.t('Ingredients')}: `, '');
-        formulation_origin = product.formulation_origin?.replace(`${$i18n.t('Formulation origin')}: `, '') || '';
-        history = product.history?.replace(`${$i18n.t('History')}: `, '') || '';
+        tags = product.tags;
+        categories = product.categories;
+        short_description = product.short_description;
+        intake_recommendation = product.intake_recommendation;
+        ingredients = product.ingredients;
+        similar_products = product.similar_products || '';
+        recommended_products = product.recommended_products || '';
+        supporting_products = product.supporting_products || '';
+        combinable_with = product.combinable_with || '';
+        product_details = product.product_details || '';
+        target_audience = product.target_audience || '';
+        application_area = product.application_area || '';
+        formulation_origin = product.formulation_origin || '';
+        history = product.history || '';
+        user_experience = product.user_experience || '';
+        reference_link = product.reference_link;
         prod_hint = product.hint || '';
-        user_experience = product.user_experience?.replace(`${$i18n.t('User experience')}: `, '') || '';
-        reference_link = product.reference_link || '';
     }
 
     const setQNAData = (qna: QNA) => {
