@@ -84,6 +84,7 @@ product_names = [
 ]
 
 product_properties = [
+    "combinable_with",
     "target_audience",
     "application_area",
     "ingredients",
@@ -194,7 +195,7 @@ questions = {
 
         "Welche Produkte enthalten Omega-3?",
         "Gibt es Proteinpräparate?",
-        "Bei welchen Produkten gibt's Proteine?",
+        "Bei welchen Produkten gibt's Protein?",
 
         "Welches Produkt hilft bei Allergien?",
         "Welche Produkte sind wirksam gegen Husten?",
@@ -282,21 +283,15 @@ questions = {
         "Wie funktioniert ein Testsatz?",
 
         "Was gehört in die Kategorie Omega Go!?",
-        "Welche Vorteile hat Omega Go?",
 
         "Welche Produkte gibt es bei Omega-Öle & Vitalkomplex?",
-        "Sind hier Omega-3-Produkte enthalten?",
-        "Sind das Produkte für Herz und Kreislauf?",
 
         "Gibt es eine komplette Liste aller Kategorien?",
-        "Können Sie mir alle Produkte anzeigen?",
-        "Wo sehe ich das ganze Sortiment?",
-        "Welche Produktbereiche gibt es insgesamt?",
 
-        "Welche Produkte gibt es für Shape Classic?",
+        "Welche Produkte gibt es in Shape Weight Management?",
         "Gibt es auch etwas für Gewichtskontrolle?",
-        "Welche Shape-Produkte helfen beim Abnehmen?",
-        "Welche Produkte gehören zu Shape Classic?",
+        "Welche Produkte helfen beim Abnehmen?",
+        "Welche Produkte gehören zu Shape Weight Management?",
 
         "Gibt es hier Proteinprodukte?",
         "Was hilft beim Abnehmen?",
@@ -323,7 +318,6 @@ questions = {
         "Kann ich das produkt während der Schwangerschaft konsumieren?",
         "Darf das Produkt in der Schwangerschaft eingenommen werden?",
         "Ist die Einnahme der Ethno-Health Produkte erlaubt, wenn ich aktuell verschreibungspflichtige Medikamente benutze?",
-        "Ist das Produkt vegan und welche Qualitätsmerkmale werden genannt?",
         "Wie bewahre ich die Produkt auf?",
         "Wie kann ich Hilfe bekommen?",
         "Wie fange ich mit Mentora an?",
