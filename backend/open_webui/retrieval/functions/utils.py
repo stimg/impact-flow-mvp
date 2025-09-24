@@ -193,24 +193,43 @@ def get_id_by_embedding(vec: List[float], col: str) -> str:
 
         return str(uuid_tuple[0])
 
-def get_follow_ups(model: str, count=3):
+def get_follow_ups(model: str, func: str, count=3):
+    # print(f"----> get_follow_ups: {model}, {func}, {count}")
     model_map = {
         "empfehlungsregister_agent": "recommendations",
         "agent_openai": "chat",
         "mentora": "chat",
     }
+    func_map = {
+        "get_product_list": "categories",
+        "get_category_list": "categories",
+        "get_products_by_category": "by_category",
+        "get_products_by_property": "by_property",
+        "get_product_details": "properties",
+        "get_product_property": "properties",
+        "get_qna_answer": "qna"
+    }
     topic = model_map.get(model, "")
+    section = func_map.get(func, "")
+
+    # print(f"----> topic: {topic}, section: {section}")
     if not topic in questions:
         return []
 
-    question_set = questions[topic]
+    if topic == "recommendations":
+        question_set = questions[topic]
+    elif section:
+        question_set = questions[topic][section]
+    else:
+        return []
+
     qn = len(question_set)
 
     if qn < count:
         return []
 
     # Generate random questions using list comprehension
-    follow_ups = [question_set[random.randrange(qn)] for _ in range(count)]
+    follow_ups = random.sample(question_set, count)
 
     return follow_ups
 

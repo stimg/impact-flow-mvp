@@ -1073,7 +1073,6 @@ async def process_chat_response(
                             follow_ups_string.find("{") : follow_ups_string.rfind("}")
                             + 1
                         ]
-
                         try:
                             follow_ups = json.loads(follow_ups_string).get(
                                 "follow_ups", []
@@ -1747,6 +1746,7 @@ async def process_chat_response(
                     nonlocal content_blocks
 
                     response_tool_calls = []
+                    function_name = None
 
                     async for line in response.body_iterator:
                         line = line.decode("utf-8") if isinstance(line, bytes) else line
@@ -1874,6 +1874,18 @@ async def process_chat_response(
                                                         ] += delta_arguments
 
                                     value = delta.get("content")
+
+                                    # Extract function name from the content
+                                    if "::function_name::" in value:
+                                        Chats.upsert_message_to_chat_by_id_and_message_id(
+                                            metadata["chat_id"],
+                                            metadata["message_id"],
+                                            {
+                                                "function_name": value.replace("::function_name::", ""),
+                                            },
+                                        )
+                                        value = ""
+                                        delta["content"] = ""
 
                                     reasoning_content = (
                                         delta.get("reasoning_content")

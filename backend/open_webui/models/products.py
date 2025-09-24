@@ -50,21 +50,16 @@ def get_chunks_by_id(product_id: str) -> list[ProductChunk]:
         ]
 
 
-class ProductsClass:
+def find_by_embedding(embedding: List[float], col="name") -> Dict[str, str] or None:
+    id = get_id_by_embedding(embedding, col)
+    print(f"Searching for product with id: {id}")
+    product_chunks = get_chunks_by_id(id)
 
-    def find_by_embedding(self, embedding: List[float], col="name") -> Dict[str, str] or None:
-        id = get_id_by_embedding(embedding, col)
-        print(f"Searching for product with id: {id}")
-        product_chunks = get_chunks_by_id(id)
+    product = {
+        chunk.section: chunk.chunk_text
+        for chunk in product_chunks
+    }
+    product["id"] = id
+    print(f"Found product: {product}")
 
-        product = {
-            chunk.section: chunk.chunk_text
-            for chunk in product_chunks
-        }
-        product["id"] = id
-        print(f"Found product: {product}")
-
-        return product
-
-
-Products = ProductsClass()
+    return product

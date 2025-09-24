@@ -20,12 +20,11 @@ from open_webui.env import SRC_LOG_LEVELS
 from open_webui.retrieval.vector.factory import VECTOR_DB_CLIENT
 from open_webui.config import RAG_EMBEDDING_CONTENT_PREFIX
 from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.models.products import ProductModel, ProcessProductForm, Products
+from open_webui.models.products import ProductModel, ProcessProductForm, find_by_embedding
 from open_webui.env import ENABLE_FORWARD_USER_INFO_HEADERS
 from open_webui.routers.ollama import GenerateEmbedForm, get_api_key
 from open_webui.utils.models import get_all_models
 from open_webui.retrieval.functions.utils import get_embeddings, cleanup_csv
-
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MODELS"])
@@ -37,7 +36,7 @@ router = APIRouter()
 def find_by_name(request: Request, product_name: str, section="name", user=Depends(get_verified_user)):
     print("Product Name:", product_name)
     embedding = get_embeddings(request, [product_name], user)
-    product = Products.find_by_embedding(embedding[0], section) if len(embedding) > 0 else None
+    product = find_by_embedding(embedding[0], section) if len(embedding) > 0 else None
 
     if product and user.role == "admin":
         return product

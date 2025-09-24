@@ -250,7 +250,6 @@ async def generate_title(
 async def generate_follow_ups(
     request: Request, form_data: dict, user=Depends(get_verified_user)
 ):
-
     if not request.app.state.config.ENABLE_FOLLOW_UP_GENERATION:
         return JSONResponse(
             status_code=status.HTTP_200_OK,
@@ -264,6 +263,7 @@ async def generate_follow_ups(
     else:
         models = request.app.state.MODELS
 
+    # print(f"---> form_data: {form_data}")
     model_id = form_data["model"]
     if model_id not in models:
         raise HTTPException(
@@ -279,6 +279,10 @@ async def generate_follow_ups(
         request.app.state.config.TASK_MODEL_EXTERNAL,
         models,
     )
+
+    function_name = None
+    for message in form_data["messages"]:
+        function_name = message.get("function_name")
 
     log.debug(
         f"generating chat title using model {task_model_id} for user {user.email} "
@@ -301,6 +305,7 @@ async def generate_follow_ups(
     payload = {
         "model": task_model_id,
         "chat_model_id": model_id,
+        "function_name": function_name,
         "messages": [{"role": "user", "content": content}],
         "stream": False,
         "metadata": {
