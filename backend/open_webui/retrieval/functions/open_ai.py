@@ -101,7 +101,7 @@ INSTRUCTIONS:
 2. Product name as the Markdown link.
 3. On the same line, the em dash (–) surrounded by spaces.
 4. On the same line, categories in cursive (*italic*).
-5. The related property section or short product description.
+5. The product property section or short description.
 
 - Take the product name from the JSON "name" property and the product link from the "reference_link" property.
 - Never invent, alter, or change the product names. Render it exactly as taken from the context.
@@ -110,6 +110,8 @@ INSTRUCTIONS:
 [Lorem Ipsum](https://www.ethno-health.com/artikeldetail/lorem-ipsum) – *Lorem & Ipsum*
 
 Lorem ipsum dolor sit amet tempor dolor qui reprehenderit qui consequuntur voluptas sit voluptate culpa eos nisi. Lorem ipsum dolor sit amet cillum magnam magnam aliquip aut quasi sed sequi lorem. 
+
+IMPORTANT: You must always render the last section with the product property section or short description.
 
             """,
             description="System prompt for product list.",
@@ -887,9 +889,12 @@ Render only these points:
                     "name": "get_products_by_property",
                     "description": f"""
                     Fetches a list of the most relevant products for the user's request.
+                    
+                    DO NOT USE if the user clearly refers to one specific product (cues: “das Produkt”, “dieses Produkt”, a product name, or anaphora to a previously named single product).
+                    DO NOT USE if the message names a specific product from this list {', '.join(product_names)}, and asks about combinations. Route to get_product_property with property="combinable_with".
 
+                    USE BY DEFAULT for symptom/benefit queries without an explicit single product reference.
                     Use ONLY if the user clearly refers to multiple products.
-                    DO NOT use if the message contains singular cues: “das Produkt”, “dieses Produkt”, “mein Produkt”, “das Präparat”, or anaphora referring to a single earlier product.
                     
                     You **must** extract product property from the user message.
                     You **must** take only one most suitable property from this list: "target_audience", "application_area", "ingredients", "formulation_origin", "user_experience"
@@ -903,6 +908,9 @@ Render only these points:
                     - Bei welchen Produkten gibt's Proteine? --> ingredients
                     - Welche Produkte helfen bei Allergien? --> application_area
                     - Welche Produkte sind wirksam gegen Husten? --> application_area
+                    - Was hilft gegen Stress? --> application_area
+                    - Was kann mir bei der Konzentration helfen? --> application_area
+                    - Was unterstüzt mein Fokus? --> application_area
                     - Was haben Sie gegen Arthrose? --> application_area
                     - Haben Sie Produkte für Klarheit und Konzentration? --> application_area
                     - Gibt es Produkte für die Unterstützung der Darmgesundheit? --> application_area
@@ -915,6 +923,8 @@ Render only these points:
                     - Was sagen die Leute über die Produkte? --> user experience
                     - Gibt es Erfolgstorys? --> user experience
 
+                    Wenn der Nutzer kein konkretes Produkt nennt und kein Singular-Hinweis (“das/dieses Produkt”) vorhanden ist, verwende standardmäßig dieses Tool.
+                    Pass ONLY: property (required) and product_name (optional). Keine anderen Felder.
                     """,
                     "parameters": {
                         "type": "object",
@@ -977,28 +987,48 @@ Render only these points:
                     "description": f"""
                     Fetches the  product property relevant to the user's request.
 
-                    Use it **ONLY** if the query applies to the **single** product.
+                    USE ONLY when the user refers to one specific product (explicit name or singular cues: “das Produkt”, “dieses Produkt”, “dieses Präparat”, or anaphora to a previously mentioned single product).
+	                DO NOT USE for generic symptom/benefit questions without a specific product.
+
+                    Pass ONLY these parameters: property (required) and product_name (optional).
+                    DO NOT include objectives, user_message, or any other fields. Extra fields will be ignored.
+
                     You **must** extract the product property from the user message.
                     You **must** take only the property from this list: {', '.join(product_properties)}
 
-                    Product_name is optional. If the user did not name a product but uses anaphora (e.g., ‘das Produkt’, ‘dieses Produkt’), call this function without product_name.
-                    Call this function without the product name, if the product name does not explicitly exist in the user query.
+                    PROPERTY LEXICON (German → property key):
+                    - “Rezeptur”, “entstanden”, “entstehung”, “erfunden”, “entwickelt”, “Ursprung”, “Herkunft”, “woher”, “tradition”, “Formulierung”, “Konzept”, “nach … Medizin/Tradition (Ayurveda, TCM, Tibet)” → formulation origin.
+                    - Wenn diese Wörter vorkommen (auch ohne Produktname), ist die gesuchte Produkteigenschaft formulation origin.
+
+                    product_name is optional. If the user did not name a product but uses anaphora (e.g., ‘das Produkt’, ‘dieses Produkt’), call this function without product_name.
+                    Call this function without the product name parameter, if the product name does not explicitly exist in the user query.
 
                     Examples:
-                    - Was ist da drin?
-                    - Welche Inhaltsstoffe hat das Produkt
-                    - Welche Zutaten hat das Produkt
-                    - Für was ist das Produkt gut?
-                    - Kann das Produkt gegen Konzentrastionsstörungen helfen?
-                    - Für wen ist das Produkt gedacht?
-                    - Was sagen die Leüte über das produkt?
-                    - Welche Erfolgsgeschichten gibt's bei daily zenergy?
-                    - Wie ist das Produkt entstanden?
-                    - Wer hat das Produkt erfunden?
-                    - Wie soll ich das Produkt einnehmen?
-                    - Wie verwendet man das Produkt produkt?
-                    - Sind die Inhaltsstoffe rein pflanzlich?
+                    - Für was ist das Produkt gut? → {{"property":"application_area"}}
+                    - Was ist da drin? → {{"property":"inhaltsstoffe"}}
+                    - Welche Inhaltsstoffe hat das Produkt → {{"property":"inhaltsstoffe"}}
+                    - Welche Zutaten hat das Produkt → {{"property":"inhaltsstoffe"}}
+                    - Sind die Inhaltsstoffe rein pflanzlich? → {{"property":"inhaltsstoffe"}}
+                    - Kann das Produkt gegen Konzentrastionsstörungen helfen? → {{"property":"application_area"}}
+                    - Kann das Produkt gegen Allergien eingesetzt werden? → {{"property":"application_area"}}
+                    - Kann ich das Produkt gegen Allergien verwenden? → {{"property":"application_area"}}
+                    - Für wen ist das Produkt gedacht? → {{"property":"target_audience"}}
+                    - Für wen ist das gut? → {{"property":"target_audience"}}
+                    - Wie fühlen sich die Menschen nach der Einnahme? → {{"property":"user_experience"}}
+                    - Was sagen die Leüte über das produkt? → {{"property":"user_experience"}}
+                    - Welche Erfolgsgeschichten gibt's bei daily zenergy? → {{"property":"user_experience"}}
+                    - Gibt es Erfahrungsberichte dazu? → {{"property":"user_experience"}}
+                    - Wie ist das Produkt entstanden? → {{"property":"formulation origin"}}
+                    - Wer hat das Produkt erfunden? → {{"property":"formulation origin"}}
+                    - Wer hat die Rezeptur von Gelenkkraft entwickelt? → {{"property":"formulation origin","product_name":"Gelenkkraft"}}
+                    - Wie soll ich das Produkt einnehmen? → {{"property":"intake_recommendation"}}
+                    - Wie verwendet man das Produkt produkt? → {{"property":"intake_recommendation"}}
+                    - Wie ist die Rezeptur entstanden? → {{"property":"formulation_origin"}}
+                    - Mit welchen Produkten kann ich das kombinieren? → {{"property":"combinable_with"}}
+                    - Welche Produkte sind gut mit dem Produkt kombinierbar? → {{"property":"combinable_with"}}
 
+
+                    Wenn kein Produktname oder Singular-Hinweis vorhanden ist, verwende dieses Tool nicht.
                     """,
                     "parameters": {
                         "type": "object",
@@ -1025,17 +1055,22 @@ Render only these points:
                     "description": f"""
                     Queries the PostgreSQL Q&A database for the related answer to questions **not directly** connected to the product properties.
                     Default for general, NOT product-related questions.
+                     
+                    DO NOT USE if the message contains any keyword that maps to a product property (see examples): {', '.join(product_properties)}
+                    Formulation origin cue words (German): “Rezeptur”, “entstanden/Entstehung”, “erfunden”, “entwickelt”, “Ursprung”, “Herkunft”, “Formulierung”, “Tradition (Ayurveda/TCM/Tibet)”.
+                    Wenn solche Wörter vorkommen, wähle nicht dieses Tool.
 
-                    DO NOT use it when the user message contains references:
-                    - to the product properties from this list: {', '.join(product_properties)}
-                    - to the product names from this list: {', '.join(product_names)}
-                    - to the product categories from this list: {', '.join(categories)}
+                    DO NOT use it when the user clearly refers to the product:
+                    - names from this list: {', '.join(product_names)}
+                    - categories from this list: {', '.join(categories)}
 
-                    Acceptable themes and keywords:
-                    - Etho Health and Etho Health Produkte
+                    You **must** extract the query **objectives** from the user message. This must be one or max two words, indicating the user's search subject.
+                    **DO NOT** use it if the extracted query **objectives** are clearly not in this list:
+                    - Etho Health
+                    - Etho Health Produkte
                     - Mentora
                     - Einnahme von Medikamenten
-                    - Schwangerschaft
+                    - Schwangerschaft, Schwangere
                     - Stillzeit
                     - Kontraindikationen
                     - Nebenwirkungen
@@ -1044,38 +1079,68 @@ Render only these points:
                     - Produktqualität
                     - Qualitätsmerkmale
                     - Produktkombinationen
-                    - Kombination
                     - Produktverträglichkeit
                     - Produktvergleich
                     - Produktunterschiede
                     - Produktlagerung
+                    - Produkformen
                     - Produktwirksamkeit
+                    - Pflanzengruppen
                     - Tägliche Anwendung von Produkten
-                    - Mentor, Berater, Coach          
+                    - Vegetarier
+                    - Veganer
 
                     Examples:
                     - Darf das Produkt bei Einnahme von Medikamenten eingenommen werden?
                     - Darf ich das Produkt nutzen, wenn ich andere Medikamenten einnehme?
-                    - Kann ich das produkt während der Schwangerschaft konsumieren?
                     - Gibt es Kontraindikationen bei der Einnahme vom Produkt?
-                    - Kann ich das Produkt während der Schwangerschaft einnehmen?
                     - Können schwangere Frauen Ethno Health-Produkte verwenden?
+                    - Können Schwangere dieses Produkt einnehmen?
                     - Kann das Produkt während der Einnahme von Medikamenten eingenommen werden?
                     - Darf ich das Produkt verwenden, wenn ich andere Medikamente einnehme?
                     - Ist das Produkt vegan und welche Qualitätsmerkmale werden genannt?
                     - Was macht die hochwertigen, natürlichen Inhaltsstoffe von Ethno Health so besonders wirksam für das tägliche Wohlbefinden?
                     - Inwiefern profitieren Vegetarier und Veganer von der umfassenden Produktpalette, die Ethno Health anbietet?
-                    - Was ist Mentora?
                     """,
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "user_message": {
-                                "type": "string",
-                                "description": "User message",
-                            }
+                            "user_message": {"type": "string"},
+                            "objectives": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "enum": [
+                                        "Ethno Health",
+                                        "Ethno Health Produkte",
+                                        "Mentora",
+                                        "Einnahme von Medikamenten",
+                                        "Schwangerschaft",
+                                        "Stillzeit",
+                                        "Kontraindikationen",
+                                        "Nebenwirkungen",
+                                        "Krebs Diagnose",
+                                        "Gesundheit",
+                                        "Produktqualität",
+                                        "Qualitätsmerkmale",
+                                        "Produktkombinationen",
+                                        "Produktverträglichkeit",
+                                        "Produktvergleich",
+                                        "Produktunterschiede",
+                                        "Produktlagerung",
+                                        "Produktformen",
+                                        "Produktwirksamkeit",
+                                        "Pflanzengruppen",
+                                        "Tägliche Anwendung von Produkten",
+                                        "Vegetarier",
+                                        "Veganer",
+                                    ],
+                                },
+                                "minItems": 1,
+                                "maxItems": 2,
+                            },
                         },
-                        "required": ["user_message"],
+                        "required": ["user_message", "objectives"],
                     },
                 },
             },
@@ -1110,7 +1175,7 @@ Here are acceptable examples:
 {"name":"get_product_property","arguments":{"property": "target_audience", "product_name": ""}}
 {"name":"get_product_property","arguments":{"property": "application_area", "product_name": "Omega 3 plus"}}
 {"name":"get_products_by_property", "arguments":{"property": "target_audience", "objectives": ["Sportler"], "user_message": "Für wen ist das Produkt gut?"}
-{"name":"get_products_by_property", "arguments":{"property": "application_area", "objectives": ["Allergie"], "user_message": ""}
+{"name":"get_products_by_property", "arguments":{"property": "application_area", "objectives": ["Kopfschmerz"], "user_message": ""}
 {"name":"get_qna_answer","arguments":{"user_message": "Sind die Produkte von Ethno Health vegetarisch?"}}
 
 Begin your response now in this JSON-only format.
@@ -1206,6 +1271,15 @@ Begin your response now in this JSON-only format.
                         arguments = value["arguments"]
                         break
 
+        if "objectives" in arguments and function_name != "get_products_by_property":
+            del arguments["objectives"]
+
+        if function_name == "get_product_property" and "user_message" in arguments:
+            del arguments["user_message"]
+
+        if function_name == "get_product_list":
+            arguments = {}
+
         print(f"- Function name: {function_name}")
         print(f"- Arguments: {arguments}")
 
@@ -1265,6 +1339,8 @@ Begin your response now in this JSON-only format.
             print("================================================")
             print(f"- Model: {self.valves.RAG_MODEL_ID}")
             print("------------------------------------------------")
+
+            yield f"::function_name::{function_name}"
 
             for chunk in self.openai.chat.completions.create(
                     model=self.valves.RAG_MODEL_ID,
