@@ -2224,7 +2224,7 @@
 					{eventTarget}
 				/>
 			</PaneGroup>
-			<div class="text-center text-sm text-gray-400 dark:text-gray-600 mb-7">&copy; {dayjs().year()} Impact Flow</div>
+            <div class="text-center text-sm text-gray-400 dark:text-gray-600 mb-7">&copy; {dayjs().year()} Impact Flow  🇨🇭 Version: 0.9.0 beta</div>
 		</div>
 	{:else if loading}
 		<div class=" flex items-center justify-center h-full w-full">

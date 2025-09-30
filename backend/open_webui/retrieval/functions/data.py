@@ -191,7 +191,6 @@ questions = {
             "Welche Ethno-Rezepturen bieten Sie an?",
         ],
         "by_category": [
-            "Welche Produkte sind in TCR enthalten?",
             "Welche Produkte gibt es zur tibetischen Rezeptur Lung?",
             "Was gehört in die Kategorie Omega Go!?",
             "Welche Produkte gibt es in Shape Weight Management?",
@@ -205,7 +204,6 @@ questions = {
             "Welche Beauty-Produkte bieten Sie an?",
             "Welche Produkte gehören in Body & Clean?",
             "Gibt es Sparpakete mit mehreren Produkten?",
-            "Welche Produkte gibt es mit chinesischen Rezepturen?",
             "Was ist der Ethno Health Coach?",
             "Was bietet mir der Ethno Health Coach?",
             "Welche Produkte gehören in die Ethno-Hausapotheke?",
@@ -228,7 +226,7 @@ questions = {
             "Bei welchen Produkten gibt's Protein?",
             "Welche Produkte helfen bei Allergien?",
             "Welche Produkte sind wirksam gegen Husten?",
-            "Was haben Sie gegen Durchfall?",
+            "Was habt ihr gegen Durchfall?",
             "Haben Sie Produkte für Klarheit und Konzentration?",
             "Gibt es Produkte für die Unterstützung der Darmgesundheit?",
             "Welche Produkte unterstützen beim Lernen?",
@@ -237,7 +235,7 @@ questions = {
         ],
         "properties": [
             "Gibt es bei dem Produkt etwas zu beachten?",
-            "Welche Inhaltsstoffe stecken in das Produkt?",
+            "Welche Inhaltsstoffe stecken im Produkt?",
             "Wofür ist die Rezeptur gedacht?",
             "Gibt es Erfahrungsberichte zum Produkt?",
             "Gibt es Erfahrungsberichte dazu?",
@@ -247,9 +245,8 @@ questions = {
             "Woher kommt die Rezeptur?",
             "Wie ist das Produkt entstanden?",
             "Was ist da drin?",
-            "Welche Inhaltsstoffe hat das Produkt",
-            "Welche Zutaten hat das Produkt",
-            "Was sagen die Leute über das produkt?",
+            "Welche Inhaltsstoffe hat das Produkt?",
+            "Welche Zutaten hat das Produkt?",
             "Wie soll ich das Produkt einnehmen?",
             "Wie verwendet man das Produkt?",
             "Wann darf das Produkt nicht eingenommen werden?",
@@ -278,8 +275,6 @@ questions = {
             "Welche Erfolgsgeschichten gibt es mit dem Produkt?",
             "Hat das Produkt gute Rückmeldungen von Kunden?",
             "Wie fühlen sich die Menschen nach der Einnahme?",
-            "Welche Erfahrungen haben Sportler mit dem Produkt gemacht?",
-            "Haben Kunden über Nebenwirkungen gesprochen?",
         ],
         "qna": [
             "Wie ist die Rückgabe und Bezahlung geregelt?",
@@ -532,7 +527,7 @@ questions = {
         # Haarverlust
         "Ich verliere viele Haare – was kann helfen?",
         "Gibt es Produkte, die das Haarwachstum fördern?",
-        "Wie kann ich meine Haare von innen stärken?",
+        "Wie kann ich den Haarwuchs von innen stärken?",
 
         # Hauterkrankungen
         "Ich habe Hautprobleme – was unterstützt die Haut von innen?",
