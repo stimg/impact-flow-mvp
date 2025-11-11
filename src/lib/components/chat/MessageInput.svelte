@@ -32,10 +32,11 @@
 		extractCurlyBraceWords
 	} from '$lib/utils';
 	import { uploadFile } from '$lib/apis/files';
-	import { generateAutoCompletion } from '$lib/apis';
+    import {generateAutoCompletion} from '$lib/apis';
+    import {getLivekitToken} from '$lib/apis/livekit';
 	import { deleteFileById } from '$lib/apis/files';
 
-	import { WEBUI_BASE_URL, WEBUI_API_BASE_URL, PASTED_TEXT_CHARACTER_LIMIT } from '$lib/constants';
+	import { WEBUI_BASE_URL, WEBUI_API_BASE_URL } from '$lib/constants';
 
 	import InputMenu from './MessageInput/InputMenu.svelte';
 	import VoiceRecording from './MessageInput/VoiceRecording.svelte';
@@ -59,6 +60,108 @@
 	import { KokoroWorker } from '$lib/workers/KokoroWorker';
 
 	const i18n = getContext('i18n');
+
+	// Feature flag: toggle LiveKit transcription
+	const LIVEKIT_ENABLED = true;
+
+    import {Room, RoomEvent, Track} from 'livekit-client';
+
+	// LiveKit ASR state
+	let lkRoom: Room | null = null;
+	let lkStopping = false;
+	let lkConnected = false;
+	let lkMicTrack: MediaStreamTrack | null = null;
+
+    async function startLivekitAsr() {
+        if (lkConnected || recording) return;
+        try {
+            prompt = "Verbinden..."
+            // Ask for permission first (so device labels appear)
+            await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            // Enumerate audio input devices
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const audioInputs = devices.filter(d => d.kind === 'audioinput');
+            console.log("Audio input devices:", audioInputs);
+
+            // Try to select the system “default” device
+            // In many browsers the deviceId “default” or first item corresponds to the active device
+            let deviceId: string | undefined;
+            const defaultDevice = audioInputs.find(d => d.deviceId === 'default')
+                ?? audioInputs[0];
+            if (defaultDevice) {
+                deviceId = defaultDevice.deviceId;
+                console.log("Using audio input device:", defaultDevice.label);
+            }
+
+            // Now get the mic stream, specifying deviceId if we found one
+            const constraints: MediaStreamConstraints = {
+                audio: deviceId ? { deviceId: { exact: deviceId } } : true
+            };
+            const micStream = await navigator.mediaDevices.getUserMedia(constraints);
+            const micTrack = micStream.getAudioTracks()[0];
+            if (!micTrack) throw new Error("Microphone track unavailable");
+
+            // LiveKit connection & publish
+            const room = new Room({ adaptiveStream: true, dynacast: true });
+
+            room.on(RoomEvent.Connected, () => {
+                console.log(`[FE] connected: room: ${room.name}, identity: ${room.localParticipant.identity}`);
+            });
+
+            room.on(RoomEvent.Disconnected, () => {
+                console.log('[Frontend] disconnected:', {
+                    serverRoomName: room.name,
+                    myIdentity: room.localParticipant.identity,
+                });
+            });
+
+            room.on(RoomEvent.DataReceived, (payload: Uint8Array, participant, topic) => {
+                const text = new TextDecoder().decode(payload);
+                if (topic === "system" && text === "connected") {
+                    console.log("[FE] Connected.");
+
+                    lkRoom = room;
+                    lkConnected = true;
+                    recording = true;
+                    toast.success($i18n.t('Voice capture started'));
+
+                } else if (topic === "transcript") {
+                    console.log("[FE] Transcripted prompt: ", text);
+                    prompt = text;
+                }
+            });
+
+            const p = room.localParticipant;
+            const { url, token } = await getLivekitToken();
+            await room.connect(url, token);
+            await p.publishTrack(micTrack, {
+                source: Track.Source.Microphone
+            });
+            console.log('Published mic track:', micTrack);
+
+        } catch (err) {
+            console.error(err);
+            toast.error($i18n.t('Failed to start voice input'));
+            if (lkMicTrack) { try { lkMicTrack.stop(); } catch {} lkMicTrack = null; }
+        }
+    }
+
+	async function stopLivekitAsr() {
+		if (!lkConnected || lkStopping) return;
+		lkStopping = true;
+		try {
+			if (lkRoom) { try { await lkRoom.disconnect(); } catch {} }
+			lkRoom = null;
+			lkConnected = false;
+			recording = false;
+		} finally {
+			if (lkMicTrack) { try { lkMicTrack.stop(); } catch {} lkMicTrack = null; }
+			lkStopping = false;
+		}
+	}
+
+	onDestroy(() => { stopLivekitAsr(); });
 
 	export let transparentBackground = false;
 
@@ -616,7 +719,7 @@
 						}}
 					/>
 
-					{#if recording}
+					{#if recording && false}
 						<VoiceRecording
 							bind:recording
 							onCancel={async () => {
@@ -1407,44 +1510,40 @@
 													class="svg-button"
 													type="button"
 													on:click={async () => {
-														try {
-															let stream = await navigator.mediaDevices
-																.getUserMedia({ audio: true })
-																.catch(function (err) {
-																	toast.error(
-																		$i18n.t(
-																			`Permission denied when accessing microphone: {{error}}`,
-																			{
-																				error: err
-																			}
-																		)
-																	);
+														if (LIVEKIT_ENABLED) {
+															if (!lkConnected) { await startLivekitAsr(); } else { await stopLivekitAsr(); }
+														} else {
+															// fallback: simple mic permission + toggle recording UI
+															try {
+																let stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch((err) => {
+																	toast.error($i18n.t(`Permission denied when accessing microphone: {{error}}`, { error: err }));
 																	return null;
 																});
-
-															if (stream) {
-																recording = true;
-																const tracks = stream.getTracks();
-																tracks.forEach((track) => track.stop());
+																if (stream) {
+																	recording = true;
+																	const tracks = stream.getTracks();
+																	tracks.forEach((t) => t.stop());
+																}
+																stream = null;
+															} catch {
+																toast.error($i18n.t('Permission denied when accessing microphone'));
 															}
-															stream = null;
-														} catch {
-															toast.error($i18n.t('Permission denied when accessing microphone'));
 														}
 													}}
 													aria-label="Voice Input"
 												>
-													<svg
-														xmlns="http://www.w3.org/2000/svg"
-														viewBox="0 0 20 20"
-														fill="currentColor"
-														class="w-5 h-5 translate-y-[0.5px]"
-													>
-														<path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
-														<path
-															d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z"
-														/>
-													</svg>
+													{#if LIVEKIT_ENABLED && lkConnected}
+														<!-- Stop icon -->
+														<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 translate-y-[0.5px] text-red-500">
+															<path d="M5 6a1 1 0 011-1h8a1 1 0 011 1v8a1 1 0 01-1 1H6a1 1 0 01-1-1V6z" />
+														</svg>
+													{:else}
+														<!-- Mic icon -->
+														<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 translate-y-[0.5px]">
+															<path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
+															<path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z" />
+														</svg>
+													{/if}
 												</button>
 											</Tooltip>
 										{/if}

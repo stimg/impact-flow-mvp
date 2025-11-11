@@ -14,6 +14,7 @@ from uuid import uuid4
 from contextlib import asynccontextmanager
 from urllib.parse import urlencode, parse_qs, urlparse
 from pydantic import BaseModel
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import text
 
 from typing import Optional
@@ -87,6 +88,7 @@ from open_webui.routers import (
     utils,
     products,
     qna,
+    livekitapi
 )
 
 from open_webui.routers.retrieval import (
@@ -1171,6 +1173,7 @@ app.include_router(utils.router, prefix="/api/v1/utils", tags=["utils"])
 app.include_router(products.router, prefix="/api/v1/products", tags=["products"])
 app.include_router(qna.router, prefix="/api/v1/qna", tags=["qna, faq"])
 app.include_router(recommendations.router, prefix="/api/v1/recommendations", tags=["recommendations"])
+app.include_router(livekitapi.router, prefix="/api/v1/livekitapi", tags=["livekitapi"])
 
 
 try:
