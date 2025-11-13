@@ -23,6 +23,9 @@
 	export let chatId;
 	export let modelId;
 
+    export let lkConnecting: boolean = false;
+    export let lkConnected: boolean = false;
+
 	let wakeLock = null;
 
 	let model = null;
@@ -45,6 +48,13 @@
 
 	let videoInputDevices = [];
 	let selectedVideoInputDeviceId = null;
+
+    let lkAutoSubmitTimeout = null;
+    let lkThinking = null;
+    let userPrompt = '';
+
+    const LIVEKIT_ENABLED = true; // $config.audio.stt.engine === 'livekit';
+    const LIVEKIT_AUTO_SUBMIT_DELAY = 500; // 3 seconds
 
 	const getVideoInputDevices = async () => {
 		const devices = await navigator.mediaDevices.enumerateDevices();
@@ -150,26 +160,26 @@
 	const transcribeHandler = async (audioBlob) => {
 		// Create a blob from the audio chunks
 
-		await tick();
-		const file = blobToFile(audioBlob, 'recording.wav');
+        await tick();
+        const file = blobToFile(audioBlob, 'recording.wav');
 
-		const res = await transcribeAudio(
-			localStorage.token,
-			file,
-			$settings?.audio?.stt?.language
-		).catch((error) => {
-			toast.error(`${error}`);
-			return null;
-		});
+        const res = await transcribeAudio(
+            localStorage.token,
+            file,
+            $settings?.audio?.stt?.language
+        ).catch((error) => {
+            toast.error(`${error}`);
+            return null;
+        });
 
-		if (res) {
-			console.log(res.text);
+        if (res) {
+            console.log(res.text);
 
-			if (res.text !== '') {
-				const _responses = await submitPrompt(res.text, { _raw: true });
-				console.log(_responses);
-			}
-		}
+            if (res.text !== '') {
+                const _responses = await submitPrompt(res.text, { _raw: true });
+                console.log(_responses);
+            }
+        }
 	};
 
 	const stopRecordingCallback = async (_continue = true) => {
@@ -220,54 +230,54 @@
 	};
 
 	const startRecording = async () => {
-		if ($showCallOverlay) {
-			if (!audioStream) {
-				audioStream = await navigator.mediaDevices.getUserMedia({
-					audio: {
-						echoCancellation: true,
-						noiseSuppression: true,
-						autoGainControl: true
-					}
-				});
-			}
-			mediaRecorder = new MediaRecorder(audioStream);
+        if ($showCallOverlay) {
+            if (!audioStream) {
+                audioStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+            }
+            mediaRecorder = new MediaRecorder(audioStream);
 
-			mediaRecorder.onstart = () => {
-				console.log('Recording started');
-				audioChunks = [];
-			};
+            mediaRecorder.onstart = () => {
+                console.log('Recording started');
+                audioChunks = [];
+            };
 
-			mediaRecorder.ondataavailable = (event) => {
-				if (hasStartedSpeaking) {
-					audioChunks.push(event.data);
-				}
-			};
+            mediaRecorder.ondataavailable = (event) => {
+                if (hasStartedSpeaking) {
+                    audioChunks.push(event.data);
+                }
+            };
 
-			mediaRecorder.onstop = (e) => {
-				console.log('Recording stopped', audioStream, e);
-				stopRecordingCallback();
-			};
+            mediaRecorder.onstop = (e) => {
+                console.log('Recording stopped', audioStream, e);
+                stopRecordingCallback();
+            };
 
-			analyseAudio(audioStream);
-		}
+            analyseAudio(audioStream);
+        }
 	};
 
 	const stopAudioStream = async () => {
-		try {
-			if (mediaRecorder) {
-				mediaRecorder.stop();
-			}
-		} catch (error) {
-			console.log('Error stopping audio stream:', error);
-		}
+        try {
+            if (mediaRecorder) {
+                mediaRecorder.stop();
+            }
+        } catch (error) {
+            console.log('Error stopping audio stream:', error);
+        }
 
-		if (!audioStream) return;
+        if (!audioStream) return;
 
-		audioStream.getAudioTracks().forEach(function (track) {
-			track.stop();
-		});
+        audioStream.getAudioTracks().forEach(function (track) {
+            track.stop();
+        });
 
-		audioStream = null;
+        audioStream = null;
 	};
 
 	// Function to calculate the RMS level from time domain data
@@ -447,7 +457,7 @@
 			audioElement.pause();
 			audioElement.currentTime = 0;
 		}
-	};
+    };
 
 	let audioAbortController = new AbortController();
 
@@ -531,8 +541,12 @@
 							console.log(
 								'%c%s',
 								'color: red; font-size: 20px;',
-								`Playing audio for content: ${content}`
+								`Playing audio for content: ${content}`,
+								`Audio agent: ${$config.audio.tts.engine}`
 							);
+                            assistantSpeaking = true;
+                            lkThinking = false;
+                            console.log('-----> START SPEAKING <-----')
 
 							const audio = audioCache.get(content);
 							await playAudio(audio); // Here ensure that playAudio is indeed correct method to execute
@@ -576,7 +590,7 @@
 			}
 			audioAbortController = new AbortController();
 
-			assistantSpeaking = true;
+			// assistantSpeaking = true;
 			// Start monitoring and playing audio for the message ID
 			monitorAndPlayAudio(id, audioAbortController.signal);
 		}
@@ -590,8 +604,6 @@
 		// there will be many sentences for the same "id"
 
 		if (currentMessageId === id) {
-			console.log(`Received chat event for message ID ${id}: ${content}`);
-
 			try {
 				if (messages[id] === undefined) {
 					messages[id] = [content];
@@ -602,6 +614,7 @@
 				console.log(content);
 
 				fetchAudio(content);
+                console.log('-----> FETCHING AUDIO: ', content, ' <-----')
 			} catch (error) {
 				console.error('Failed to fetch or play audio:', error);
 			}
@@ -614,6 +627,33 @@
 		finishedMessages[id] = true;
 
 		chatStreaming = false;
+	};
+
+	const transcriptReadyHandler = async (e) => {
+		userPrompt = e.detail.text;
+		console.log('[CallOverlay] Transcript ready:', userPrompt);
+
+		// Interrupt assistant if it's currently speaking
+		if (assistantSpeaking) {
+			console.log('[CallOverlay] User started speaking - interrupting assistant');
+			await stopAllAudio();
+		}
+
+		// Clear any existing auto-submit timeout
+		if (lkAutoSubmitTimeout) {
+			console.log('[CallOverlay] Clearing previous auto-submit timeout');
+			clearTimeout(lkAutoSubmitTimeout);
+			lkAutoSubmitTimeout = null;
+		}
+
+		// Set new timeout for auto-submit after 3 seconds of silence
+		console.log('[CallOverlay] Setting new auto-submit timeout (3 seconds)');
+		lkAutoSubmitTimeout = setTimeout(() => {
+			console.log('[CallOverlay] Auto-submitting prompt after 3 seconds of silence');
+			submitPrompt(userPrompt);
+			lkAutoSubmitTimeout = null;
+            lkThinking = true;
+		}, LIVEKIT_AUTO_SUBMIT_DELAY);
 	};
 
 	onMount(async () => {
@@ -647,20 +687,37 @@
 
 		model = $models.find((m) => m.id === modelId);
 
-		startRecording();
+        if (LIVEKIT_ENABLED) {
+            // Start LiveKit automatically when overlay opens
+            console.log('[CallOverlay] Starting LiveKit ASR automatically');
+            dispatch('startLivekitAsr');
 
+            // Listen for transcript ready events
+            eventTarget.addEventListener('transcript:ready', transcriptReadyHandler);
+        } else {
+            await startRecording();
+        }
 		eventTarget.addEventListener('chat:start', chatStartHandler);
 		eventTarget.addEventListener('chat', chatEventHandler);
 		eventTarget.addEventListener('chat:finish', chatFinishHandler);
 
 		return async () => {
 			await stopAllAudio();
-
-			stopAudioStream();
+			await stopAudioStream();
 
 			eventTarget.removeEventListener('chat:start', chatStartHandler);
 			eventTarget.removeEventListener('chat', chatEventHandler);
 			eventTarget.removeEventListener('chat:finish', chatFinishHandler);
+
+			if (LIVEKIT_ENABLED) {
+				eventTarget.removeEventListener('transcript:ready', transcriptReadyHandler);
+				if (lkAutoSubmitTimeout) {
+					clearTimeout(lkAutoSubmitTimeout);
+					lkAutoSubmitTimeout = null;
+				}
+
+                dispatch('stopLivekitAsr');
+			}
 
 			audioAbortController.abort();
 			await tick();
@@ -669,7 +726,7 @@
 
 			await stopRecordingCallback(false);
 			await stopCamera();
-		};
+        };
 	});
 
 	onDestroy(async () => {
@@ -681,6 +738,17 @@
 		eventTarget.removeEventListener('chat:start', chatStartHandler);
 		eventTarget.removeEventListener('chat', chatEventHandler);
 		eventTarget.removeEventListener('chat:finish', chatFinishHandler);
+
+		if (LIVEKIT_ENABLED) {
+			eventTarget.removeEventListener('transcript:ready', transcriptReadyHandler);
+			if (lkAutoSubmitTimeout) {
+				clearTimeout(lkAutoSubmitTimeout);
+				lkAutoSubmitTimeout = null;
+			}
+
+            dispatch('stopLivekitAsr');
+		}
+
 		audioAbortController.abort();
 
 		await tick();
@@ -751,6 +819,44 @@
 							r="3"
 						/><circle class="spinner_qM83 spinner_ZTLf" cx="20" cy="12" r="3" /></svg
 					>
+                {:else if LIVEKIT_ENABLED}
+                    <div class="flex items-center justify-center w-full h-full">LIVEKIT</div>
+                    <svg
+                            class="size-12 text-gray-900 dark:text-gray-400"
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            xmlns="http://www.w3.org/2000/svg"
+                    ><style>
+                        .spinner_qM83 {
+                            animation: spinner_8HQG 1.05s infinite;
+                        }
+                        .spinner_oXPr {
+                            animation-delay: 0.1s;
+                        }
+                        .spinner_ZTLf {
+                            animation-delay: 0.2s;
+                        }
+                        @keyframes spinner_8HQG {
+                            0%,
+                            57.14% {
+                                animation-timing-function: cubic-bezier(0.33, 0.66, 0.66, 1);
+                                transform: translate(0);
+                            }
+                            28.57% {
+                                animation-timing-function: cubic-bezier(0.33, 0, 0.66, 0.33);
+                                transform: translateY(-6px);
+                            }
+                            100% {
+                                transform: translate(0);
+                            }
+                        }
+                    </style><circle class="spinner_qM83" cx="4" cy="12" r="3" /><circle
+                            class="spinner_qM83 spinner_oXPr"
+                            cx="12"
+                            cy="12"
+                            r="3"
+                    /><circle class="spinner_qM83 spinner_ZTLf" cx="20" cy="12" r="3" /></svg
+                    >
 				{:else}
 					<div
 						class=" {rmsLevel * 100 > 4
@@ -762,7 +868,7 @@
 									: 'size-12'}  transition-all rounded-full {(model?.info?.meta
 							?.profile_image_url ?? '/static/favicon.png') !== '/static/favicon.png'
 							? ' bg-cover bg-center bg-no-repeat'
-							: 'bg-black dark:bg-white'}  bg-black dark:bg-white"
+							: 'bg-teal-500 dark:bg-white'}  bg-teal-500 dark:bg-white"
 						style={(model?.info?.meta?.profile_image_url ?? '/static/favicon.png') !==
 						'/static/favicon.png'
 							? `background-image: url('${model?.info?.meta?.profile_image_url}');`
@@ -783,59 +889,65 @@
 						}
 					}}
 				>
-					{#if emoji}
-						<div
-							class="  transition-all rounded-full"
-							style="font-size:{rmsLevel * 100 > 4
+                    {#if LIVEKIT_ENABLED}
+                        <div class="">
+                            <div class="text-5xl font-bold text-gray-300 mb-20">LiveKit</div>
+                            <div>{userPrompt}</div>
+                        </div>
+                    {:else}
+                        {#if emoji}
+                            <div
+                                    class="  transition-all rounded-full"
+                                    style="font-size:{rmsLevel * 100 > 4
 								? '13'
 								: rmsLevel * 100 > 2
 									? '12'
 									: rmsLevel * 100 > 1
 										? '11.5'
 										: '11'}rem;width:100%;text-align:center;"
-						>
-							{emoji}
-						</div>
-					{:else if loading || assistantSpeaking}
-						<svg
-							class="size-44 text-gray-900 dark:text-gray-400"
-							viewBox="0 0 24 24"
-							fill="currentColor"
-							xmlns="http://www.w3.org/2000/svg"
-							><style>
-								.spinner_qM83 {
-									animation: spinner_8HQG 1.05s infinite;
-								}
-								.spinner_oXPr {
-									animation-delay: 0.1s;
-								}
-								.spinner_ZTLf {
-									animation-delay: 0.2s;
-								}
-								@keyframes spinner_8HQG {
-									0%,
-									57.14% {
-										animation-timing-function: cubic-bezier(0.33, 0.66, 0.66, 1);
-										transform: translate(0);
-									}
-									28.57% {
-										animation-timing-function: cubic-bezier(0.33, 0, 0.66, 0.33);
-										transform: translateY(-6px);
-									}
-									100% {
-										transform: translate(0);
-									}
-								}
-							</style><circle class="spinner_qM83" cx="4" cy="12" r="3" /><circle
-								class="spinner_qM83 spinner_oXPr"
-								cx="12"
-								cy="12"
-								r="3"
-							/><circle class="spinner_qM83 spinner_ZTLf" cx="20" cy="12" r="3" /></svg
-						>
-					{:else}
-						<div
-							class=" {rmsLevel * 100 > 4
+                            >
+                                {emoji}
+                            </div>
+                        {:else if loading || assistantSpeaking}
+                            <svg
+                                    class="size-44 text-gray-900 dark:text-gray-400"
+                                    viewBox="0 0 24 24"
+                                    fill="currentColor"
+                                    xmlns="http://www.w3.org/2000/svg"
+                            ><style>
+                                .spinner_qM83 {
+                                    animation: spinner_8HQG 1.05s infinite;
+                                }
+                                .spinner_oXPr {
+                                    animation-delay: 0.1s;
+                                }
+                                .spinner_ZTLf {
+                                    animation-delay: 0.2s;
+                                }
+                                @keyframes spinner_8HQG {
+                                    0%,
+                                    57.14% {
+                                        animation-timing-function: cubic-bezier(0.33, 0.66, 0.66, 1);
+                                        transform: translate(0);
+                                    }
+                                    28.57% {
+                                        animation-timing-function: cubic-bezier(0.33, 0, 0.66, 0.33);
+                                        transform: translateY(-6px);
+                                    }
+                                    100% {
+                                        transform: translate(0);
+                                    }
+                                }
+                            </style><circle class="spinner_qM83" cx="4" cy="12" r="3" /><circle
+                                    class="spinner_qM83 spinner_oXPr"
+                                    cx="12"
+                                    cy="12"
+                                    r="3"
+                            /><circle class="spinner_qM83 spinner_ZTLf" cx="20" cy="12" r="3" /></svg
+                            >
+                        {:else}
+                            <div
+                                    class=" {rmsLevel * 100 > 4
 								? ' size-52'
 								: rmsLevel * 100 > 2
 									? 'size-48'
@@ -844,13 +956,14 @@
 										: 'size-40'}  transition-all rounded-full {(model?.info?.meta
 								?.profile_image_url ?? '/static/favicon.png') !== '/static/favicon.png'
 								? ' bg-cover bg-center bg-no-repeat'
-								: 'bg-black dark:bg-white'} "
-							style={(model?.info?.meta?.profile_image_url ?? '/static/favicon.png') !==
+								: 'bg-teal-500'} "
+                                    style={(model?.info?.meta?.profile_image_url ?? '/static/favicon.png') !==
 							'/static/favicon.png'
 								? `background-image: url('${model?.info?.meta?.profile_image_url}');`
 								: ''}
-						/>
-					{/if}
+                            />
+                        {/if}
+                    {/if}
 				</button>
 			{:else}
 				<div class="relative flex video-container w-full max-h-full pt-2 pb-4 md:py-6 px-2 h-full">
@@ -888,83 +1001,99 @@
 		</div>
 
 		<div class="flex justify-between items-center pb-2 w-full">
-			<div>
-				{#if camera}
-					<VideoInputMenu
-						devices={videoInputDevices}
-						on:change={async (e) => {
-							console.log(e.detail);
-							selectedVideoInputDeviceId = e.detail;
-							await stopVideoStream();
-							await startVideoStream();
-						}}
-					>
-						<button class=" p-3 rounded-full bg-gray-50 dark:bg-gray-900" type="button">
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								viewBox="0 0 20 20"
-								fill="currentColor"
-								class="size-5"
-							>
-								<path
-									fill-rule="evenodd"
-									d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0V5.36l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z"
-									clip-rule="evenodd"
-								/>
-							</svg>
-						</button>
-					</VideoInputMenu>
-				{:else}
-					<Tooltip content={$i18n.t('Camera')}>
-						<button
-							class=" p-3 rounded-full bg-gray-50 dark:bg-gray-900"
-							type="button"
-							on:click={async () => {
-								await navigator.mediaDevices.getUserMedia({ video: true });
-								startCamera();
-							}}
-						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								fill="none"
-								viewBox="0 0 24 24"
-								stroke-width="1.5"
-								stroke="currentColor"
-								class="size-5"
-							>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"
-								/>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z"
-								/>
-							</svg>
-						</button>
-					</Tooltip>
-				{/if}
-			</div>
+            {#if !LIVEKIT_ENABLED}
+                <div>
+                    {#if camera}
+                        <VideoInputMenu
+                            devices={videoInputDevices}
+                            on:change={async (e) => {
+                                console.log(e.detail);
+                                selectedVideoInputDeviceId = e.detail;
+                                await stopVideoStream();
+                                await startVideoStream();
+                            }}
+                        >
+                            <button class=" p-3 rounded-full bg-gray-50 dark:bg-gray-900" type="button">
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 20 20"
+                                    fill="currentColor"
+                                    class="size-5"
+                                >
+                                    <path
+                                        fill-rule="evenodd"
+                                        d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0V5.36l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z"
+                                        clip-rule="evenodd"
+                                    />
+                                </svg>
+                            </button>
+                        </VideoInputMenu>
+                    {:else}
+                        <Tooltip content={$i18n.t('Camera')}>
+                            <button
+                                class=" p-3 rounded-full bg-gray-50 dark:bg-gray-900"
+                                type="button"
+                                on:click={async () => {
+                                    await navigator.mediaDevices.getUserMedia({ video: true });
+                                    startCamera();
+                                }}
+                            >
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke-width="1.5"
+                                    stroke="currentColor"
+                                    class="size-5"
+                                >
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"
+                                    />
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z"
+                                    />
+                                </svg>
+                            </button>
+                        </Tooltip>
+                    {/if}
+                </div>
+            {/if}
 
 			<div>
 				<button
 					type="button"
 					on:click={() => {
-						if (assistantSpeaking) {
-							stopAllAudio();
-						}
+                        if (assistantSpeaking) {
+                            stopAllAudio();
+                        }
 					}}
 				>
 					<div class=" line-clamp-1 text-sm font-medium">
-						{#if loading}
-							{$i18n.t('Thinking...')}
-						{:else if assistantSpeaking}
-							{$i18n.t('Tap to interrupt')}
-						{:else}
-							{$i18n.t('Listening...')}
-						{/if}
+                        {#if LIVEKIT_ENABLED}
+                            {#if lkConnecting}
+                                {$i18n.t('Connecting...')}
+                            {:else if lkConnected}
+                                {#if assistantSpeaking}
+                                    {$i18n.t('Tap to interrupt livekit')}
+                                {:else if lkThinking}
+                                    {$i18n.t('Thinking...')}
+                                {:else}
+                                    {$i18n.t('Listening...')}
+                                {/if}
+                            {/if}
+                        {:else}
+                            {#if loading}
+                                {$i18n.t('Thinking...')}
+                            {:else if assistantSpeaking}
+                                {$i18n.t('Tap to interrupt')}
+                            {:else}
+                                {$i18n.t('Listening...')}
+                            {/if}
+                        {/if}
 					</div>
 				</button>
 			</div>

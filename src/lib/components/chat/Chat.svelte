@@ -91,6 +91,8 @@
 	import Spinner from '../common/Spinner.svelte';
 	import { fade } from 'svelte/transition';
 	import dayjs from '$lib/dayjs';
+    import {Room, RoomEvent, Track} from "livekit-client";
+    import {getLivekitToken} from "$lib/apis/livekit";
 
 	export let chatIdProp = '';
 
@@ -187,6 +189,8 @@
 	$: if (selectedModels && chatIdProp !== '') {
 		saveSessionSelectedModels();
 	}
+
+    const LIVEKIT_ENABLED = true; // $config.audio.stt.engine === 'livekit';
 
 	const saveSessionSelectedModels = () => {
 		if (selectedModels.length === 0 || (selectedModels.length === 1 && selectedModels[0] === '')) {
@@ -433,7 +437,117 @@
 		}
 	};
 
-	let pageSubscribe = null;
+    let lkRoom: Room | null = null;
+    let lkStopping = false;
+    let lkConnecting = false;
+    let lkConnected = false;
+    let lkMicTrack: MediaStreamTrack | null = null;
+
+    export const startLivekitAsr = async () => {
+        console.log('startLivekitAsr');
+        if (lkConnected || lkConnecting) return;
+        try {
+            prompt = $i18n.t('Connecting...')
+            lkConnecting = true;
+            // Ask for permission first (so device labels appear)
+            await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            // Enumerate audio input devices
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const audioInputs = devices.filter(d => d.kind === 'audioinput');
+            console.log("Audio input devices:", audioInputs);
+
+            // Try to select the system “default” device
+            // In many browsers the deviceId “default” or first item corresponds to the active device
+            let deviceId: string | undefined;
+            const defaultDevice = audioInputs.find(d => d.deviceId === 'default')
+                ?? audioInputs[0];
+            if (defaultDevice) {
+                deviceId = defaultDevice.deviceId;
+                console.log("Using audio input device:", defaultDevice.label);
+            }
+
+            // Now get the mic stream, specifying deviceId if we found one
+            const constraints: MediaStreamConstraints = {
+                audio: deviceId ? { deviceId: { exact: deviceId } } : true
+            };
+            const micStream = await navigator.mediaDevices.getUserMedia(constraints);
+            const micTrack = micStream.getAudioTracks()[0];
+            if (!micTrack) throw new Error("Microphone track unavailable");
+
+            // LiveKit connection & publish
+            const room = new Room({ adaptiveStream: true, dynacast: true });
+
+            room.on(RoomEvent.Connected, () => {
+                console.log(`[FE] connected: room: ${room.name}, identity: ${room.localParticipant.identity}`);
+            });
+
+            room.on(RoomEvent.Disconnected, () => {
+                console.log('[Frontend] disconnected:', {
+                    serverRoomName: room.name,
+                    myIdentity: room.localParticipant.identity,
+                });
+            });
+
+            room.on(RoomEvent.DataReceived, (payload: Uint8Array, participant, kind, topic) => {
+                const text = new TextDecoder().decode(payload);
+                if (topic === 'system') {
+                    console.log('[FE] System message: ', text);
+
+                    if (text === "connected" || text === "delete") {
+                        prompt = '';
+                        lkRoom = room;
+                        lkConnecting = false;
+                        lkConnected = true;
+                        toast.success($i18n.t('Listening...'));
+
+                    } else if (text === "send") {
+                        // Manual send signal from agent (if needed)
+                        submitPrompt(prompt);
+                    }
+
+                } else if (topic === "transcript") {
+                    console.log("[FE] Transcripted prompt: ", text);
+                    prompt = text;
+
+                    // Dispatch event with the transcript text
+                    eventTarget.dispatchEvent(
+                        new CustomEvent('transcript:ready', {
+                            detail: { text }
+                        })
+                    );
+                }
+            });
+
+            const p = room.localParticipant;
+            const { url, token } = await getLivekitToken();
+            await room.connect(url, token);
+            await p.publishTrack(micTrack, {
+                source: Track.Source.Microphone
+            });
+
+        } catch (err) {
+            console.error(err);
+            toast.error($i18n.t('Failed to start voice input'));
+            if (lkMicTrack) { try { lkMicTrack.stop(); } catch {} lkMicTrack = null; }
+        }
+    }
+
+    export const stopLivekitAsr = async () => {
+        console.log('stopLivekitAsr');
+        if (!lkConnected || lkStopping) return;
+        lkStopping = true;
+        try {
+            if (lkRoom) { try { await lkRoom.disconnect(); } catch {} }
+            lkRoom = null;
+            lkConnected = false;
+        } finally {
+            if (lkMicTrack) { try { lkMicTrack.stop(); } catch {} lkMicTrack = null; }
+            lkStopping = false;
+        }
+    }
+
+    let pageSubscribe = null;
 	onMount(async () => {
 		loading = true;
 		console.log('mounted');
@@ -507,6 +621,7 @@
 	onDestroy(() => {
 		pageSubscribe();
 		chatIdUnsubscriber?.();
+        stopLivekitAsr();
 		window.removeEventListener('message', onMessageHandler);
 		$socket?.off('chat-events', chatEventHandler);
 	});
@@ -1340,8 +1455,9 @@
 	// Chat functions
 	//////////////////////////
 
-	const submitPrompt = async (userPrompt, { _raw = false } = {}) => {
+	const submitPrompt = async (userPrompt: string | undefined, { _raw = false } = {}) => {
 		console.log('submitPrompt', userPrompt, $chatId);
+		console.log('prompt', prompt);
 
 		const messages = createMessagesList(history, history.currentId);
 		const _selectedModels = selectedModels.map((modelId) =>
@@ -2100,58 +2216,66 @@
 								</div>
 							</div>
 
-							<div class=" pb-10">
-								<MessageInput
-									{history}
-									{taskIds}
-									{selectedModels}
-									bind:files
-									bind:prompt
-									bind:autoScroll
-									bind:selectedToolIds
-									bind:selectedFilterIds
-									bind:imageGenerationEnabled
-									bind:codeInterpreterEnabled
-									bind:webSearchEnabled
-									bind:atSelectedModel
-									toolServers={$toolServers}
-									transparentBackground={$settings?.backgroundImageUrl ?? false}
-									{stopResponse}
-									{createMessagePair}
-									onChange={(input) => {
-										if (!$temporaryChatEnabled) {
-											if (input.prompt !== null) {
-												localStorage.setItem(
-													`chat-input${$chatId ? `-${$chatId}` : ''}`,
-													JSON.stringify(input)
-												);
-											} else {
-												localStorage.removeItem(`chat-input${$chatId ? `-${$chatId}` : ''}`);
-											}
-										}
-									}}
-									on:upload={async (e) => {
-										const { type, data } = e.detail;
+                            <div class=" pb-10">
+                                <MessageInput
+                                    {history}
+                                    {taskIds}
+                                    {selectedModels}
+                                    bind:files
+                                    bind:prompt
+                                    bind:autoScroll
+                                    bind:selectedToolIds
+                                    bind:selectedFilterIds
+                                    bind:imageGenerationEnabled
+                                    bind:codeInterpreterEnabled
+                                    bind:webSearchEnabled
+                                    bind:atSelectedModel
+                                    toolServers={$toolServers}
+                                    transparentBackground={$settings?.backgroundImageUrl ?? false}
+                                    {stopResponse}
+                                    {createMessagePair}
+                                    lkConnecting={lkConnecting}
+                                    lkConnected={lkConnected}
+                                    onChange={(input) => {
+                                        if (!$temporaryChatEnabled) {
+                                            if (input.prompt !== null) {
+                                                localStorage.setItem(
+                                                    `chat-input${$chatId ? `-${$chatId}` : ''}`,
+                                                    JSON.stringify(input)
+                                                );
+                                            } else {
+                                                localStorage.removeItem(`chat-input${$chatId ? `-${$chatId}` : ''}`);
+                                            }
+                                        }
+                                    }}
+                                    on:upload={async (e) => {
+                                        const { type, data } = e.detail;
 
-										if (type === 'web') {
-											await uploadWeb(data);
-										} else if (type === 'youtube') {
-											await uploadYoutubeTranscription(data);
-										} else if (type === 'google-drive') {
-											await uploadGoogleDriveFile(data);
-										}
-									}}
-									on:submit={async (e) => {
-										if (e.detail || files.length > 0) {
-											await tick();
-											submitPrompt(
-												($settings?.richTextInput ?? true)
-													? e.detail.replaceAll('\n\n', '\n')
-													: e.detail
-											);
-										}
-									}}
-								/>
+                                        if (type === 'web') {
+                                            await uploadWeb(data);
+                                        } else if (type === 'youtube') {
+                                            await uploadYoutubeTranscription(data);
+                                        } else if (type === 'google-drive') {
+                                            await uploadGoogleDriveFile(data);
+                                        }
+                                    }}
+                                    on:submit={async (e) => {
+                                        if (e.detail || files.length > 0) {
+                                            await tick();
+                                            submitPrompt(
+                                                ($settings?.richTextInput ?? true)
+                                                    ? e.detail.replaceAll('\n\n', '\n')
+                                                    : e.detail
+                                            );
+                                        }
+                                    }}
+                                    on:stopLivekitAsr={() => {
+                                      stopLivekitAsr();
+                                    }}
+                                    on:startLivekitAsr={() => {
+                                      startLivekitAsr();
+                                    }}
+                                />
 
 								<div class="text-xs italic text-gray-500 text-center line-clamp-2 right-0 left-0">
 									<div class="px-20">
@@ -2175,6 +2299,8 @@
 									bind:atSelectedModel
 									transparentBackground={$settings?.backgroundImageUrl ?? false}
 									toolServers={$toolServers}
+                                    lkConnecting={lkConnecting}
+                                    lkConnected={lkConnected}
 									{stopResponse}
 									{createMessagePair}
 									on:upload={async (e) => {
@@ -2196,7 +2322,13 @@
 											);
 										}
 									}}
-								/>
+                                    on:stopLivekitAsr={() => {
+                                      stopLivekitAsr();
+                                    }}
+                                    on:startLivekitAsr={() => {
+                                      startLivekitAsr();
+                                    }}
+                                />
 							</div>
 						{/if}
 					</div>
@@ -2220,8 +2352,17 @@
 					}, [])}
 					{submitPrompt}
 					{stopResponse}
+                    const dispatch = createEventDispatcher();
 					{showMessage}
 					{eventTarget}
+                    {lkConnecting}
+                    {lkConnected}
+                    on:startLivekitAsr={() => {
+                      startLivekitAsr();
+                    }}
+                    on:stopLivekitAsr={() => {
+                      stopLivekitAsr();
+                    }}
 				/>
 			</PaneGroup>
             <div class="text-center text-sm text-gray-400 dark:text-gray-600 mb-7">&copy; {dayjs().year()} Impact Flow  🇨🇭 Version: 0.9.0 beta</div>

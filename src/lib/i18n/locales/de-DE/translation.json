@@ -243,6 +243,7 @@
 	"Confirm your new password": "Neues Passwort bestätigen",
 	"Connect to your own OpenAI compatible API endpoints.": "Verbinden Sie sich zu Ihren OpenAI-kompatiblen Endpunkten.",
 	"Connect to your own OpenAPI compatible external tool servers.": "Verbinden Sie sich zu Ihren OpenAPI-kompatiblen Werkzeug-Servern.",
+	"Connecting...": "Verbinde...",
 	"Connection failed": "Verbindung fehlgeschlagen",
 	"Connection successful": "Verbindung erfolgreich",
 	"Connection Type": "Verbindungstyp",

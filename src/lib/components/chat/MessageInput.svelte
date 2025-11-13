@@ -11,19 +11,19 @@
 	import { onMount, tick, getContext, createEventDispatcher, onDestroy } from 'svelte';
 	const dispatch = createEventDispatcher();
 
-	import {
-		type Model,
-		mobile,
-		settings,
-		showSidebar,
-		models,
-		config,
-		showCallOverlay,
-		tools,
-		user as _user,
-		showControls,
-		TTSWorker
-	} from '$lib/stores';
+    import {
+        type Model,
+        mobile,
+        settings,
+        showSidebar,
+        models,
+        config,
+        showCallOverlay,
+        tools,
+        user as _user,
+        showControls,
+        TTSWorker, showOverview, showArtifacts, chats
+    } from '$lib/stores';
 
 	import {
 		blobToFile,
@@ -61,107 +61,8 @@
 
 	const i18n = getContext('i18n');
 
-	// Feature flag: toggle LiveKit transcription
-	const LIVEKIT_ENABLED = true;
-
     import {Room, RoomEvent, Track} from 'livekit-client';
-
-	// LiveKit ASR state
-	let lkRoom: Room | null = null;
-	let lkStopping = false;
-	let lkConnected = false;
-	let lkMicTrack: MediaStreamTrack | null = null;
-
-    async function startLivekitAsr() {
-        if (lkConnected || recording) return;
-        try {
-            prompt = "Verbinden..."
-            // Ask for permission first (so device labels appear)
-            await navigator.mediaDevices.getUserMedia({ audio: true });
-
-            // Enumerate audio input devices
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const audioInputs = devices.filter(d => d.kind === 'audioinput');
-            console.log("Audio input devices:", audioInputs);
-
-            // Try to select the system “default” device
-            // In many browsers the deviceId “default” or first item corresponds to the active device
-            let deviceId: string | undefined;
-            const defaultDevice = audioInputs.find(d => d.deviceId === 'default')
-                ?? audioInputs[0];
-            if (defaultDevice) {
-                deviceId = defaultDevice.deviceId;
-                console.log("Using audio input device:", defaultDevice.label);
-            }
-
-            // Now get the mic stream, specifying deviceId if we found one
-            const constraints: MediaStreamConstraints = {
-                audio: deviceId ? { deviceId: { exact: deviceId } } : true
-            };
-            const micStream = await navigator.mediaDevices.getUserMedia(constraints);
-            const micTrack = micStream.getAudioTracks()[0];
-            if (!micTrack) throw new Error("Microphone track unavailable");
-
-            // LiveKit connection & publish
-            const room = new Room({ adaptiveStream: true, dynacast: true });
-
-            room.on(RoomEvent.Connected, () => {
-                console.log(`[FE] connected: room: ${room.name}, identity: ${room.localParticipant.identity}`);
-            });
-
-            room.on(RoomEvent.Disconnected, () => {
-                console.log('[Frontend] disconnected:', {
-                    serverRoomName: room.name,
-                    myIdentity: room.localParticipant.identity,
-                });
-            });
-
-            room.on(RoomEvent.DataReceived, (payload: Uint8Array, participant, topic) => {
-                const text = new TextDecoder().decode(payload);
-                if (topic === "system" && text === "connected") {
-                    console.log("[FE] Connected.");
-
-                    lkRoom = room;
-                    lkConnected = true;
-                    recording = true;
-                    toast.success($i18n.t('Voice capture started'));
-
-                } else if (topic === "transcript") {
-                    console.log("[FE] Transcripted prompt: ", text);
-                    prompt = text;
-                }
-            });
-
-            const p = room.localParticipant;
-            const { url, token } = await getLivekitToken();
-            await room.connect(url, token);
-            await p.publishTrack(micTrack, {
-                source: Track.Source.Microphone
-            });
-            console.log('Published mic track:', micTrack);
-
-        } catch (err) {
-            console.error(err);
-            toast.error($i18n.t('Failed to start voice input'));
-            if (lkMicTrack) { try { lkMicTrack.stop(); } catch {} lkMicTrack = null; }
-        }
-    }
-
-	async function stopLivekitAsr() {
-		if (!lkConnected || lkStopping) return;
-		lkStopping = true;
-		try {
-			if (lkRoom) { try { await lkRoom.disconnect(); } catch {} }
-			lkRoom = null;
-			lkConnected = false;
-			recording = false;
-		} finally {
-			if (lkMicTrack) { try { lkMicTrack.stop(); } catch {} lkMicTrack = null; }
-			lkStopping = false;
-		}
-	}
-
-	onDestroy(() => { stopLivekitAsr(); });
+    import {page} from "$app/stores";
 
 	export let transparentBackground = false;
 
@@ -190,7 +91,10 @@
 
 	export let imageGenerationEnabled = false;
 	export let webSearchEnabled = false;
-	export let codeInterpreterEnabled = false;
+    export let codeInterpreterEnabled = false;
+
+    export let lkConnecting: boolean = false;
+    export let lkConnected: boolean = false;
 
 	$: onChange({
 		prompt,
@@ -299,7 +203,10 @@
 		});
 	};
 
-	const screenCaptureHandler = async () => {
+    // LiveKit ASR state
+    const LIVEKIT_ENABLED = true; // $config.audio.stt.engine === 'livekit';
+
+    const screenCaptureHandler = async () => {
 		try {
 			// Request screen media
 			const mediaStream = await navigator.mediaDevices.getDisplayMedia({
@@ -556,7 +463,7 @@
 		shiftKey = false;
 	};
 
-	onMount(async () => {
+    onMount(async () => {
 		loaded = true;
 
 		window.setTimeout(() => {
@@ -1511,7 +1418,13 @@
 													type="button"
 													on:click={async () => {
 														if (LIVEKIT_ENABLED) {
-															if (!lkConnected) { await startLivekitAsr(); } else { await stopLivekitAsr(); }
+															if (!lkConnected) {
+                                                                dispatch('startLivekitAsr');
+                                                                recording = true;
+                                                            } else {
+                                                               dispatch('stopLivekitAsr');
+                                                               recording = false;
+                                                            }
 														} else {
 															// fallback: simple mic permission + toggle recording UI
 															try {
@@ -1532,11 +1445,26 @@
 													}}
 													aria-label="Voice Input"
 												>
-													{#if LIVEKIT_ENABLED && lkConnected}
-														<!-- Stop icon -->
-														<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 translate-y-[0.5px] text-red-500">
-															<path d="M5 6a1 1 0 011-1h8a1 1 0 011 1v8a1 1 0 01-1 1H6a1 1 0 01-1-1V6z" />
-														</svg>
+													{#if LIVEKIT_ENABLED}
+														{#if lkConnecting}
+                                                            <!-- Mic icon yellow -->
+                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 translate-y-[0.5px] text-amber-500">
+                                                                <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
+                                                                <path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z" />
+                                                            </svg>
+                                                        {:else if lkConnected}
+                                                            <!-- Mic icon red -->
+                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 translate-y-[0.5px] text-rose-500">
+                                                                <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
+                                                                <path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z" />
+                                                            </svg>
+                                                        {:else}
+                                                            <!-- Mic icon green-->
+                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 translate-y-[0.5px]">
+                                                                <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
+                                                                <path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z" />
+                                                            </svg>
+                                                        {/if}
 													{:else}
 														<!-- Mic icon -->
 														<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 translate-y-[0.5px]">
@@ -1568,69 +1496,63 @@
 												</Tooltip>
 											</div>
 										{:else if prompt === '' && files.length === 0 && ($_user?.role === 'admin' || ($_user?.permissions?.chat?.call ?? true))}
-											<div class=" flex items-center">
-												<!-- {$i18n.t('Call')} -->
-												<Tooltip content={$i18n.t('Voice mode')}>
-													<button
-														class="button !px-1.5"
-														type="button"
-														on:click={async () => {
-															if (selectedModels.length > 1) {
-																toast.error($i18n.t('Select only one model to call'));
+    											<div class=" flex items-center">
+     												<!-- {$i18n.t('Call')} -->
+     												<Tooltip content={$i18n.t('Voice mode')}>
+                                                        <button
+                                                          class="button !px-1.5"
+                                                          type="button"
+                                                          on:click={async () => {
+                                                            if (selectedModels.length > 1) {
+                                                              toast.error($i18n.t('Select only one model to call'));
+                                                              return;
+                                                            }
 
-																return;
-															}
-
-															if ($config.audio.stt.engine === 'web') {
-																toast.error(
-																	$i18n.t('Call feature is not supported when using Web STT engine')
-																);
-
-																return;
-															}
-															// check if user has access to getUserMedia
-															try {
-																let stream = await navigator.mediaDevices.getUserMedia({
-																	audio: true
-																});
-																// If the user grants the permission, proceed to show the call overlay
-
-																if (stream) {
-																	const tracks = stream.getTracks();
-																	tracks.forEach((track) => track.stop());
-																}
-
-																stream = null;
-
-																if ($settings.audio?.tts?.engine === 'browser-kokoro') {
-																	// If the user has not initialized the TTS worker, initialize it
-																	if (!$TTSWorker) {
-																		await TTSWorker.set(
-																			new KokoroWorker({
-																				dtype: $settings.audio?.tts?.engineConfig?.dtype ?? 'fp32'
-																			})
-																		);
-
-																		await $TTSWorker.init();
-																	}
-																}
-
-																showCallOverlay.set(true);
-																showControls.set(true);
-															} catch (err) {
-																// If the user denies the permission or an error occurs, show an error message
-																toast.error(
-																	$i18n.t('Permission denied when accessing media devices')
-																);
-															}
-														}}
-														aria-label="Call"
-													>
-														<Headphone className="size-5" />
-													</button>
-												</Tooltip>
-											</div>
-										{:else}
+                                                            if (LIVEKIT_ENABLED) {
+                                                              if (!lkConnected) {
+                                                                recording = true;
+                                                                showCallOverlay.set(true);
+                                                                showControls.set(true);
+                                                              } else {
+                                                                recording = false;
+                                                                showControls.set(false);
+                                                                showCallOverlay.set(false);
+                                                              }
+                                                            } else {
+                                                              if ($config.e === 'web') {
+                                                                toast.error($i18n.t('Call feature is not supported when using Web STT engine'));
+                                                                return;
+                                                              }
+                                                              try {
+                                                                let stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                                                                if (stream) {
+                                                                  const tracks = stream.getTracks();
+                                                                  tracks.forEach((track) => track.stop());
+                                                                }
+                                                                stream = null;
+                                                                if ($settings.audio?.tts?.engine === 'browser-kokoro') {
+                                                                  if (!$TTSWorker) {
+                                                                    TTSWorker.set(
+                                                                      new KokoroWorker({
+                                                                        dtype: $settings.audio?.tts?.engineConfig?.dtype ?? 'fp32'
+                                                                      })
+                                                                    );
+                                                                    await $TTSWorker.init();
+                                                                  }
+                                                                }
+                                                                showCallOverlay.set(true);
+                                                                showControls.set(true);
+                                                              } catch (err) {
+                                                                toast.error($i18n.t('Permission denied when accessing media devices'));
+                                                              }
+                                                            }
+                                                          }}
+                                                          aria-label="Call"
+                                                        >
+                                                          <Headphone className="size-5" />
+                                                        </button>     												</Tooltip>
+     											</div>
+     									{:else}
 											<div class=" flex items-center">
 												<Tooltip content={$i18n.t('Send message')}>
 													<button id="send-message-button" class="button !px-1.5" type="submit" disabled={prompt === '' && files.length === 0}>
@@ -1668,3 +1590,5 @@
 		</div>
 	</div>
 {/if}
+
+																							

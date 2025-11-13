@@ -3,7 +3,7 @@
 	import { slide } from 'svelte/transition';
 	import { Pane, PaneResizer } from 'paneforge';
 
-	import { onDestroy, onMount, tick } from 'svelte';
+    import {createEventDispatcher, onDestroy, onMount, tick} from 'svelte';
 	import { mobile, showControls, showCallOverlay, showOverview, showArtifacts } from '$lib/stores';
 
 	import Modal from '../common/Modal.svelte';
@@ -32,6 +32,9 @@
 
 	export let pane;
 
+    export let lkConnecting: boolean = false;
+    export let lkConnected: boolean = false;
+
 	let mediaQuery;
 	let largeScreen = false;
 	let dragged = false;
@@ -45,6 +48,8 @@
 			pane.resize(minSize);
 		}
 	};
+
+    const dispatch = createEventDispatcher();
 
 	const handleMediaQuery = async (e) => {
 		if (e.matches) {
@@ -160,9 +165,11 @@
 								{modelId}
 								{chatId}
 								{eventTarget}
-								on:close={() => {
-									showControls.set(false);
-								}}
+                                lkConnecting={lkConnecting}
+                                lkConnected={lkConnected}
+                                on:startLivekitAsr={() => dispatch('startLivekitAsr')}
+                                on:stopLivekitAsr={() => dispatch('stopLivekitAsr')}
+								on:close={() => showControls.set(false)}
 							/>
 						</div>
 					{:else if $showArtifacts}
@@ -241,9 +248,11 @@
 									{modelId}
 									{chatId}
 									{eventTarget}
-									on:close={() => {
-										showControls.set(false);
-									}}
+                                    lkConnecting={lkConnecting}
+                                    lkConnected={lkConnected}
+                                        on:startLivekitAsr={() => dispatch('startLivekitAsr')}
+                                    on:stopLivekitAsr={() => dispatch('stopLivekitAsr')}
+                                    on:close={() => showControls.set(false)}
 								/>
 							</div>
 						{:else if $showArtifacts}

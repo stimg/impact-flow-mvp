@@ -43,7 +43,10 @@
 
 	export let toolServers = [];
 
-	let models = [];
+    export let lkConnecting: boolean = false;
+    export let lkConnected: boolean = false;
+
+    let models = [];
 
 	const selectSuggestionPrompt = async (p) => {
 		let text = p;
@@ -228,6 +231,8 @@
 					bind:atSelectedModel
 					{toolServers}
 					{transparentBackground}
+                    lkConnecting={lkConnecting}
+                    lkConnected={lkConnected}
 					{stopResponse}
 					{createMessagePair}
 					placeholder={$i18n.t('How can I help you today?', { username })}
@@ -246,7 +251,13 @@
 					on:submit={(e) => {
 						dispatch('submit', e.detail);
 					}}
-				/>
+                    on:startLivekitAsr={() => {
+                        dispatch('startLivekitAsr');
+                    }}
+                    on:stopLivekitAsr={() => {
+                        dispatch('stopLivekitAsr');
+                    }}
+            />
 			</div>
 		</div>
 	</div>

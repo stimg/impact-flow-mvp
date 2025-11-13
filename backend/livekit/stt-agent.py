@@ -1,4 +1,5 @@
 import asyncio
+import re
 
 from dotenv import load_dotenv
 
@@ -22,15 +23,18 @@ async def entrypoint(ctx: agents.JobContext):
 
         asyncio.create_task(process_track(track))
 
-        ctx.room.local_participant.publish_data(
-            "connected",
-            topic="system"
-        )
-
     async def process_track(track: rtc.RemoteTrack):
         stt = deepgram.STT(model="nova-3", language="de")
         stt_stream = stt.stream()
-        audio_stream = rtc.AudioStream(track)
+        audio_stream = rtc.AudioStream.from_track(
+            track=track,
+            sample_rate=16000,
+            num_channels=1
+        )
+        await ctx.room.local_participant.publish_data(
+            "connected",
+            topic="system"
+        )
 
         async with asyncio.TaskGroup() as tg:
             # Create task for processing STT stream
@@ -51,12 +55,25 @@ async def entrypoint(ctx: agents.JobContext):
             async for event in stream:
                 if event.type == SpeechEventType.FINAL_TRANSCRIPT:
                     text = event.alternatives[0].text
-                    print(f"Propmpt: {text}")
+                    print(f"Prompt:  {text}")
 
-                    await ctx.room.local_participant.publish_data(
-                        text.encode('utf-8'),
-                        topic="transcript"   # optional topic
-                    )
+                    if re.search(r"^(nachricht )?(senden|wenn denn|wenden)\W?$", text, re.I):
+                        print("Send prompt detected.")
+                        await ctx.room.local_participant.publish_data(
+                            "send",
+                            topic="system"   # optional topic
+                        )
+                    elif re.search(r"^(nachricht )?l([öa])schen\W?$", text, re.I):
+                        print("Delete prompt detected.")
+                        await ctx.room.local_participant.publish_data(
+                            "delete",
+                            topic="system"   # optional topic
+                        )
+                    else:
+                        await ctx.room.local_participant.publish_data(
+                            text.encode('utf-8'),
+                            topic="transcript"   # optional topic
+                        )
                 # elif event.type == SpeechEventType.INTERIM_TRANSCRIPT:
                 #     print(f"> {event.alternatives[0].text}")
                 # elif event.type == SpeechEventType.START_OF_SPEECH:
