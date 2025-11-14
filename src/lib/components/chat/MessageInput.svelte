@@ -204,7 +204,7 @@
 	};
 
     // LiveKit ASR state
-    const LIVEKIT_ENABLED = true; // $config.audio.stt.engine === 'livekit';
+    const LIVEKIT_ENABLED = $config.audio.stt.engine === 'livekit';
 
     const screenCaptureHandler = async () => {
 		try {

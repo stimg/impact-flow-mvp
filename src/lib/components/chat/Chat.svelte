@@ -190,7 +190,7 @@
 		saveSessionSelectedModels();
 	}
 
-    const LIVEKIT_ENABLED = true; // $config.audio.stt.engine === 'livekit';
+    const LIVEKIT_ENABLED = $config.audio.stt.engine === 'livekit';
 
 	const saveSessionSelectedModels = () => {
 		if (selectedModels.length === 0 || (selectedModels.length === 1 && selectedModels[0] === '')) {

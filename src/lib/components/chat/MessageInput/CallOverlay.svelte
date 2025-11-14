@@ -53,7 +53,7 @@
     let lkThinking = null;
     let userPrompt = '';
 
-    const LIVEKIT_ENABLED = true; // $config.audio.stt.engine === 'livekit';
+    const LIVEKIT_ENABLED = $config.audio.stt.engine === 'livekit';
     const LIVEKIT_AUTO_SUBMIT_DELAY = 500; // 3 seconds
 
 	const getVideoInputDevices = async () => {
@@ -1078,7 +1078,7 @@
                                 {$i18n.t('Connecting...')}
                             {:else if lkConnected}
                                 {#if assistantSpeaking}
-                                    {$i18n.t('Tap to interrupt livekit')}
+                                    {$i18n.t('Tap to interrupt')}
                                 {:else if lkThinking}
                                     {$i18n.t('Thinking...')}
                                 {:else}
