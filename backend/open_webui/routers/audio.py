@@ -26,10 +26,14 @@ from fastapi import (
     UploadFile,
     status,
     APIRouter,
+    WebSocket,
+    WebSocketDisconnect,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+import asyncio
+import websockets
 
 
 from open_webui.utils.auth import get_admin_user, get_verified_user
@@ -1132,3 +1136,106 @@ async def get_voices(request: Request, user=Depends(get_verified_user)):
             {"id": k, "name": v} for k, v in get_available_voices(request).items()
         ]
     }
+
+
+@router.websocket("/speech/stream")
+async def speech_stream_ws(websocket: WebSocket, request: Request):
+    """
+    WebSocket endpoint for ElevenLabs streaming TTS
+    Client sends: {"text": "...", "voice": "...", "model": "..."}
+    Server streams back: binary audio chunks
+    """
+    await websocket.accept()
+
+    try:
+        # Receive initial configuration from client
+        config = await websocket.receive_json()
+        text = config.get("text", "")
+        voice_id = config.get("voice", "")
+        model_id = config.get("model", request.app.state.config.TTS_MODEL)
+
+        if not text or not voice_id:
+            await websocket.send_json({"error": "Missing text or voice_id"})
+            await websocket.close()
+            return
+
+        # Validate voice_id
+        if voice_id not in get_available_voices(request):
+            await websocket.send_json({"error": "Invalid voice_id"})
+            await websocket.close()
+            return
+
+        # Connect to ElevenLabs WebSocket
+        elevenlabs_ws_url = f"wss://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream-input?model_id={model_id}"
+
+        async with websockets.connect(
+            elevenlabs_ws_url,
+            extra_headers={
+                "xi-api-key": request.app.state.config.TTS_API_KEY
+            }
+        ) as elevenlabs_ws:
+            # Send initial configuration to ElevenLabs
+            await elevenlabs_ws.send(json.dumps({
+                "text": " ",  # Initial connection
+                "voice_settings": {
+                    "stability": 0.5,
+                    "similarity_boost": 0.75
+                },
+                "xi_api_key": request.app.state.config.TTS_API_KEY
+            }))
+
+            # Send the actual text
+            await elevenlabs_ws.send(json.dumps({
+                "text": text,
+                "try_trigger_generation": True
+            }))
+
+            # Send end-of-stream signal
+            await elevenlabs_ws.send(json.dumps({
+                "text": ""
+            }))
+
+            # Stream audio chunks back to client
+            async for message in elevenlabs_ws:
+                if isinstance(message, bytes):
+                    # Audio chunk - forward to client
+                    await websocket.send_bytes(message)
+                else:
+                    # JSON message from ElevenLabs
+                    data = json.loads(message)
+                    if data.get("audio"):
+                        # Base64 encoded audio
+                        import base64
+                        audio_bytes = base64.b64decode(data["audio"])
+                        await websocket.send_bytes(audio_bytes)
+                    elif data.get("isFinal"):
+                        # Stream complete
+                        await websocket.send_json({"status": "complete"})
+                        break
+                    elif data.get("error"):
+                        # Error from ElevenLabs
+                        log.error(f"ElevenLabs error: {data['error']}")
+                        await websocket.send_json({"error": data["error"]})
+                        break
+
+        await websocket.close()
+
+    except WebSocketDisconnect:
+        log.info("Client disconnected from speech stream")
+    except websockets.exceptions.WebSocketException as e:
+        log.error(f"ElevenLabs WebSocket error: {e}")
+        try:
+            await websocket.send_json({"error": str(e)})
+        except:
+            pass
+    except Exception as e:
+        log.exception(f"Error in speech_stream_ws: {e}")
+        try:
+            await websocket.send_json({"error": str(e)})
+        except:
+            pass
+    finally:
+        try:
+            await websocket.close()
+        except:
+            pass

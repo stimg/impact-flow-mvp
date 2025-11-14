@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/zerkalenkov/Documents/Projects/impact-flow-mvp/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
