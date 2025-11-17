@@ -2352,11 +2352,11 @@
 					}, [])}
 					{submitPrompt}
 					{stopResponse}
-                    const dispatch = createEventDispatcher();
 					{showMessage}
 					{eventTarget}
                     {lkConnecting}
                     {lkConnected}
+                    lkLocalParticipant={lkRoom?.localParticipant}
                     on:startLivekitAsr={() => {
                       startLivekitAsr();
                     }}

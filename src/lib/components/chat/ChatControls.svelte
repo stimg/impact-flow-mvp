@@ -34,6 +34,7 @@
 
     export let lkConnecting: boolean = false;
     export let lkConnected: boolean = false;
+    export let lkLocalParticipant = null;
 
 	let mediaQuery;
 	let largeScreen = false;
@@ -167,6 +168,7 @@
 								{eventTarget}
                                 lkConnecting={lkConnecting}
                                 lkConnected={lkConnected}
+                                {lkLocalParticipant}
                                 on:startLivekitAsr={() => dispatch('startLivekitAsr')}
                                 on:stopLivekitAsr={() => dispatch('stopLivekitAsr')}
 								on:close={() => showControls.set(false)}
@@ -250,7 +252,8 @@
 									{eventTarget}
                                     lkConnecting={lkConnecting}
                                     lkConnected={lkConnected}
-                                        on:startLivekitAsr={() => dispatch('startLivekitAsr')}
+                                    {lkLocalParticipant}
+                                    on:startLivekitAsr={() => dispatch('startLivekitAsr')}
                                     on:stopLivekitAsr={() => dispatch('stopLivekitAsr')}
                                     on:close={() => showControls.set(false)}
 								/>

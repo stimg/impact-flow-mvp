@@ -25,6 +25,7 @@
 
     export let lkConnecting: boolean = false;
     export let lkConnected: boolean = false;
+    export let lkLocalParticipant = null;
 
 	let wakeLock = null;
 
@@ -52,9 +53,24 @@
     let lkAutoSubmitTimeout = null;
     let lkThinking = null;
     let userPrompt = '';
+    let lkAudioLevel = 0; // Current audio level from LiveKit (0.0 - 1.0)
+    let lkVisualizerInterval = null;
 
     const LIVEKIT_ENABLED = $config.audio.stt.engine === 'livekit';
-    const LIVEKIT_AUTO_SUBMIT_DELAY = 500; // 3 seconds
+    const LIVEKIT_AUTO_SUBMIT_DELAY = 500;
+    const AUDIO_BARS_COUNT = 12;
+    const AUDIO_BARS = Array(AUDIO_BARS_COUNT).fill(0).map((_, i) => i); // Cache array
+
+	// Reactive: Start/stop visualizer based on LiveKit connection and state
+	$: if (LIVEKIT_ENABLED) {
+		if (lkConnected && !assistantSpeaking && !lkThinking) {
+			// In listening state - start visualizer if not already running
+			// startVisualizer();
+		} else if (lkThinking || assistantSpeaking) {
+			// Stop visualizer when thinking or assistant is speaking
+			// stopVisualizer();
+		}
+	}
 
 	const getVideoInputDevices = async () => {
 		const devices = await navigator.mediaDevices.enumerateDevices();
@@ -629,9 +645,53 @@
 		chatStreaming = false;
 	};
 
+	let debugUpdateCounter = 0;
+	const MIN_LEVEL_CHANGE = 0.02; // Only update if change is > 2%
+
+	const updateVisualizer = () => {
+		// Get real-time audio level from LiveKit localParticipant (0.0 - 1.0)
+		const rawLevel = lkLocalParticipant?.audioLevel ?? 0;
+
+		// Calculate smoothed level
+		const smoothedLevel = lkAudioLevel * 0.6 + rawLevel * 0.4;
+
+		// Only update if change is significant (reduces re-renders)
+		if (Math.abs(smoothedLevel - lkAudioLevel) >= MIN_LEVEL_CHANGE) {
+			lkAudioLevel = smoothedLevel;
+		}
+
+		// Debug logging every 2 seconds
+		debugUpdateCounter++;
+		if (debugUpdateCounter % 20 === 0) {
+			console.log('[CallOverlay] Audio level:', lkAudioLevel.toFixed(3));
+		}
+	};
+
+	const startVisualizer = () => {
+		if (lkVisualizerInterval) return;
+
+		console.log('[CallOverlay] Starting real-time audio visualizer');
+		lkAudioLevel = 0;
+
+		// Start animation loop at 10 FPS (100ms) - sufficient for audio meter
+		// lkVisualizerInterval = setInterval(updateVisualizer, 100);
+	};
+
+	const stopVisualizer = () => {
+		console.log('[CallOverlay] Stopping visualizer');
+
+		if (lkVisualizerInterval) {
+			clearInterval(lkVisualizerInterval);
+			lkVisualizerInterval = null;
+		}
+
+		lkAudioLevel = 0;
+	};
+
 	const transcriptReadyHandler = async (e) => {
 		userPrompt = e.detail.text;
-		console.log('[CallOverlay] Transcript ready:', userPrompt);
+
+		console.log('[CallOverlay] 🎤 TRANSCRIPT READY:', userPrompt);
 
 		// Interrupt assistant if it's currently speaking
 		if (assistantSpeaking) {
@@ -641,15 +701,13 @@
 
 		// Clear any existing auto-submit timeout
 		if (lkAutoSubmitTimeout) {
-			console.log('[CallOverlay] Clearing previous auto-submit timeout');
 			clearTimeout(lkAutoSubmitTimeout);
 			lkAutoSubmitTimeout = null;
 		}
 
-		// Set new timeout for auto-submit after 3 seconds of silence
-		console.log('[CallOverlay] Setting new auto-submit timeout (3 seconds)');
+		// Set new timeout for auto-submit after delay
 		lkAutoSubmitTimeout = setTimeout(() => {
-			console.log('[CallOverlay] Auto-submitting prompt after 3 seconds of silence');
+			console.log('[CallOverlay] 📤 Auto-submitting prompt');
 			submitPrompt(userPrompt);
 			lkAutoSubmitTimeout = null;
             lkThinking = true;
@@ -716,6 +774,9 @@
 					lkAutoSubmitTimeout = null;
 				}
 
+				// Clean up visualizer
+				// stopVisualizer();
+
                 dispatch('stopLivekitAsr');
 			}
 
@@ -745,6 +806,9 @@
 				clearTimeout(lkAutoSubmitTimeout);
 				lkAutoSubmitTimeout = null;
 			}
+
+			// Clean up visualizer
+			// stopVisualizer();
 
             dispatch('stopLivekitAsr');
 		}
@@ -1072,29 +1136,46 @@
                         }
 					}}
 				>
-					<div class=" line-clamp-1 text-sm font-medium">
-                        {#if LIVEKIT_ENABLED}
-                            {#if lkConnecting}
-                                {$i18n.t('Connecting...')}
-                            {:else if lkConnected}
-                                {#if assistantSpeaking}
-                                    {$i18n.t('Tap to interrupt')}
-                                {:else if lkThinking}
-                                    {$i18n.t('Thinking...')}
-                                {:else}
-                                    {$i18n.t('Listening...')}
-                                {/if}
-                            {/if}
-                        {:else}
-                            {#if loading}
-                                {$i18n.t('Thinking...')}
-                            {:else if assistantSpeaking}
-                                {$i18n.t('Tap to interrupt')}
-                            {:else}
-                                {$i18n.t('Listening...')}
-                            {/if}
-                        {/if}
-					</div>
+					{#if LIVEKIT_ENABLED && lkConnected && !assistantSpeaking && !lkThinking}
+						<!-- Audio Level Meter (horizontal) -->
+						<div class="flex items-center justify-center gap-0.5 h-5 px-4">
+							{#each AUDIO_BARS as index}
+								{@const threshold = (index + 1) / 35}
+								{@const isFilled = lkAudioLevel >= threshold}
+								{@const isTeal = index < 8}
+								<div
+									class="audio-bar"
+									class:filled={isFilled}
+									class:teal={isTeal}
+									class:yellow={!isTeal}
+								/>
+							{/each}
+						</div>
+					{:else}
+						<div class="line-clamp-1 text-sm font-medium">
+							{#if LIVEKIT_ENABLED}
+								{#if lkConnecting}
+									{$i18n.t('Connecting...')}
+								{:else if lkConnected}
+									{#if assistantSpeaking}
+										{$i18n.t('Tap to interrupt')}
+									{:else if lkThinking}
+										{$i18n.t('Thinking...')}
+									{:else}
+										{$i18n.t('Listening...')}
+									{/if}
+								{/if}
+							{:else}
+								{#if loading}
+									{$i18n.t('Thinking...')}
+								{:else if assistantSpeaking}
+									{$i18n.t('Tap to interrupt')}
+								{:else}
+									{$i18n.t('Listening...')}
+								{/if}
+							{/if}
+						</div>
+					{/if}
 				</button>
 			</div>
 
@@ -1128,3 +1209,41 @@
 		</div>
 	</div>
 {/if}
+
+<style>
+	/* Horizontal audio level meter bars */
+	.audio-bar {
+		width: 15px;
+		height: 10px;
+		border: lightgrey solid 1px;
+		transition: background-color 100ms ease-out, border-color 100ms ease-out;
+	}
+
+	/* Filled state - bar is active */
+	.audio-bar.teal.filled {
+        background-color: lightseagreen;
+        border-color: lightseagreen;
+	}
+
+	.audio-bar.filled {
+        background-color: orange;
+        border-color: orange;
+	}
+
+
+	/* Mobile responsiveness - narrower bars */
+	@media (max-width: 640px) {
+		.audio-bar {
+			width: 15px;
+			height: 10px;
+		}
+	}
+
+	/* Tablet and up - slightly wider bars */
+	@media (min-width: 768px) {
+		.audio-bar {
+			width: 15px;
+			height: 10px;
+		}
+	}
+</style>
