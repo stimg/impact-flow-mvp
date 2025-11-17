@@ -143,3 +143,4 @@ opentelemetry-instrumentation-httpx==0.53b1
 opentelemetry-instrumentation-aiohttp-client==0.53b1
 
 livekit==1.0.18
+livekit-api==1.0.7

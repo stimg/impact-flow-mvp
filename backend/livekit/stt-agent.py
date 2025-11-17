@@ -24,7 +24,7 @@ async def entrypoint(ctx: agents.JobContext):
         asyncio.create_task(process_track(track))
 
     async def process_track(track: rtc.RemoteTrack):
-        stt = deepgram.STT(model="nova-3", language="de")
+        stt = deepgram.STT(model="nova-3", language="de", endpointing_ms=250)
         stt_stream = stt.stream()
         audio_stream = rtc.AudioStream.from_track(
             track=track,
