@@ -61,7 +61,7 @@
 
 	const i18n = getContext('i18n');
 
-    import {Room, RoomEvent, Track} from 'livekit-client';
+    import {ConnectionState} from 'livekit-client';
     import {page} from "$app/stores";
 
 	export let transparentBackground = false;
@@ -93,8 +93,9 @@
 	export let webSearchEnabled = false;
     export let codeInterpreterEnabled = false;
 
-    export let lkConnecting: boolean = false;
-    export let lkConnected: boolean = false;
+    export let lkConnectionState: ConnectionState;
+    export let lkMicLevel: number;
+    export let lkMicActive: boolean;
 
 	$: onChange({
 		prompt,
@@ -1418,7 +1419,7 @@
 													type="button"
 													on:click={async () => {
 														if (LIVEKIT_ENABLED) {
-															if (!lkConnected) {
+															if (lkConnectionState !== ConnectionState.Connected) {
                                                                 dispatch('startLivekitAsr');
                                                                 recording = true;
                                                             } else {
@@ -1446,13 +1447,13 @@
 													aria-label="Voice Input"
 												>
 													{#if LIVEKIT_ENABLED}
-														{#if lkConnecting}
+														{#if lkConnectionState === ConnectionState.Connecting}
                                                             <!-- Mic icon yellow -->
                                                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 translate-y-[0.5px] text-amber-500">
                                                                 <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
                                                                 <path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z" />
                                                             </svg>
-                                                        {:else if lkConnected}
+                                                        {:else if lkConnectionState === ConnectionState.Connected}
                                                             <!-- Mic icon red -->
                                                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 translate-y-[0.5px] text-rose-500">
                                                                 <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
@@ -1509,7 +1510,7 @@
                                                             }
 
                                                             if (LIVEKIT_ENABLED) {
-                                                              if (!lkConnected) {
+                                                              if (lkConnectionState !== ConnectionState.Connected) {
                                                                 recording = true;
                                                                 showCallOverlay.set(true);
                                                                 showControls.set(true);

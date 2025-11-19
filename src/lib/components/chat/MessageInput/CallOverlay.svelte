@@ -13,8 +13,9 @@
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import VideoInputMenu from './CallOverlay/VideoInputMenu.svelte';
 	import { KokoroWorker } from '$lib/workers/KokoroWorker';
+    import {ConnectionState} from 'livekit-client';
 
-	const i18n = getContext('i18n');
+    const i18n = getContext('i18n');
 
 	export let eventTarget: EventTarget;
 	export let submitPrompt: Function;
@@ -23,9 +24,9 @@
 	export let chatId;
 	export let modelId;
 
-    export let lkConnecting: boolean = false;
-    export let lkConnected: boolean = false;
-    export let lkLocalParticipant = null;
+    export let lkConnectionState: ConnectionState | null = ConnectionState.Disconnected;
+    export let lkMicLevel: number;
+    export let lkMicActive: boolean;
 
 	let wakeLock = null;
 
@@ -50,11 +51,10 @@
 	let videoInputDevices = [];
 	let selectedVideoInputDeviceId = null;
 
-    let lkAutoSubmitTimeout = null;
-    let lkThinking = null;
     let userPrompt = '';
-    let lkAudioLevel = 0; // Current audio level from LiveKit (0.0 - 1.0)
-    let lkVisualizerInterval = null;
+    let lkAutoSubmitTimeout = null;
+    let lkThinking = false;
+    // let lkAudioLevel = 0;
 
     const LIVEKIT_ENABLED = $config.audio.stt.engine === 'livekit';
     const LIVEKIT_AUTO_SUBMIT_DELAY = 500;
@@ -63,14 +63,8 @@
 
 	// Reactive: Start/stop visualizer based on LiveKit connection and state
 	$: if (LIVEKIT_ENABLED) {
-		if (lkConnected && !assistantSpeaking && !lkThinking) {
-			// In listening state - start visualizer if not already running
-			// startVisualizer();
-		} else if (lkThinking || assistantSpeaking) {
-			// Stop visualizer when thinking or assistant is speaking
-			// stopVisualizer();
-		}
-	}
+        lkMicActive = lkConnectionState === ConnectionState.Connected && !assistantSpeaking && !lkThinking;
+    }
 
 	const getVideoInputDevices = async () => {
 		const devices = await navigator.mediaDevices.enumerateDevices();
@@ -171,7 +165,6 @@
 	};
 
 	const MIN_DECIBELS = -55;
-	const VISUALIZER_BUFFER_LENGTH = 300;
 
 	const transcribeHandler = async (audioBlob) => {
 		// Create a blob from the audio chunks
@@ -457,6 +450,7 @@
 	const stopAllAudio = async () => {
 		assistantSpeaking = false;
 		interrupted = true;
+        lkMicActive = true;
 
 		if (chatStreaming) {
 			stopResponse();
@@ -645,49 +639,6 @@
 		chatStreaming = false;
 	};
 
-	let debugUpdateCounter = 0;
-	const MIN_LEVEL_CHANGE = 0.02; // Only update if change is > 2%
-
-	const updateVisualizer = () => {
-		// Get real-time audio level from LiveKit localParticipant (0.0 - 1.0)
-		const rawLevel = lkLocalParticipant?.audioLevel ?? 0;
-
-		// Calculate smoothed level
-		const smoothedLevel = lkAudioLevel * 0.6 + rawLevel * 0.4;
-
-		// Only update if change is significant (reduces re-renders)
-		if (Math.abs(smoothedLevel - lkAudioLevel) >= MIN_LEVEL_CHANGE) {
-			lkAudioLevel = smoothedLevel;
-		}
-
-		// Debug logging every 2 seconds
-		debugUpdateCounter++;
-		if (debugUpdateCounter % 20 === 0) {
-			console.log('[CallOverlay] Audio level:', lkAudioLevel.toFixed(3));
-		}
-	};
-
-	const startVisualizer = () => {
-		if (lkVisualizerInterval) return;
-
-		console.log('[CallOverlay] Starting real-time audio visualizer');
-		lkAudioLevel = 0;
-
-		// Start animation loop at 10 FPS (100ms) - sufficient for audio meter
-		// lkVisualizerInterval = setInterval(updateVisualizer, 100);
-	};
-
-	const stopVisualizer = () => {
-		console.log('[CallOverlay] Stopping visualizer');
-
-		if (lkVisualizerInterval) {
-			clearInterval(lkVisualizerInterval);
-			lkVisualizerInterval = null;
-		}
-
-		lkAudioLevel = 0;
-	};
-
 	const transcriptReadyHandler = async (e) => {
 		userPrompt = e.detail.text;
 
@@ -774,9 +725,6 @@
 					lkAutoSubmitTimeout = null;
 				}
 
-				// Clean up visualizer
-				// stopVisualizer();
-
                 dispatch('stopLivekitAsr');
 			}
 
@@ -806,10 +754,7 @@
 				clearTimeout(lkAutoSubmitTimeout);
 				lkAutoSubmitTimeout = null;
 			}
-
-			// Clean up visualizer
-			// stopVisualizer();
-
+            stopResponse();
             dispatch('stopLivekitAsr');
 		}
 
@@ -883,44 +828,6 @@
 							r="3"
 						/><circle class="spinner_qM83 spinner_ZTLf" cx="20" cy="12" r="3" /></svg
 					>
-                {:else if LIVEKIT_ENABLED}
-                    <div class="flex items-center justify-center w-full h-full">LIVEKIT</div>
-                    <svg
-                            class="size-12 text-gray-900 dark:text-gray-400"
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                            xmlns="http://www.w3.org/2000/svg"
-                    ><style>
-                        .spinner_qM83 {
-                            animation: spinner_8HQG 1.05s infinite;
-                        }
-                        .spinner_oXPr {
-                            animation-delay: 0.1s;
-                        }
-                        .spinner_ZTLf {
-                            animation-delay: 0.2s;
-                        }
-                        @keyframes spinner_8HQG {
-                            0%,
-                            57.14% {
-                                animation-timing-function: cubic-bezier(0.33, 0.66, 0.66, 1);
-                                transform: translate(0);
-                            }
-                            28.57% {
-                                animation-timing-function: cubic-bezier(0.33, 0, 0.66, 0.33);
-                                transform: translateY(-6px);
-                            }
-                            100% {
-                                transform: translate(0);
-                            }
-                        }
-                    </style><circle class="spinner_qM83" cx="4" cy="12" r="3" /><circle
-                            class="spinner_qM83 spinner_oXPr"
-                            cx="12"
-                            cy="12"
-                            r="3"
-                    /><circle class="spinner_qM83 spinner_ZTLf" cx="20" cy="12" r="3" /></svg
-                    >
 				{:else}
 					<div
 						class=" {rmsLevel * 100 > 4
@@ -956,7 +863,7 @@
                     {#if LIVEKIT_ENABLED}
                         <div class="">
                             <div class="text-5xl font-bold text-gray-300 mb-20">LiveKit</div>
-                            <div>{userPrompt}</div>
+                            <div class="w-full text-left">{userPrompt}</div>
                         </div>
                     {:else}
                         {#if emoji}
@@ -1136,33 +1043,59 @@
                         }
 					}}
 				>
-					{#if LIVEKIT_ENABLED && lkConnected && !assistantSpeaking && !lkThinking}
+					{#if LIVEKIT_ENABLED && lkConnectionState === ConnectionState.Connected && !assistantSpeaking && !lkThinking}
 						<!-- Audio Level Meter (horizontal) -->
-						<div class="flex items-center justify-center gap-0.5 h-5 px-4">
+						<div class="flex items-center justify-center gap-0.5 h-10 px-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 translate-y-[0.5px] text-rose-500">
+                                <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z"></path>
+                                <path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z"></path>
+                            </svg>
 							{#each AUDIO_BARS as index}
-								{@const threshold = (index + 1) / 35}
-								{@const isFilled = lkAudioLevel >= threshold}
-								{@const isTeal = index < 8}
+								{@const isFilled = lkMicLevel * AUDIO_BARS_COUNT >= index + 1}
+								{@const isTeal = index < AUDIO_BARS_COUNT - (AUDIO_BARS_COUNT / 4)}
+								{@const isStandby = lkMicLevel === 0}
 								<div
 									class="audio-bar"
 									class:filled={isFilled}
 									class:teal={isTeal}
 									class:yellow={!isTeal}
+									class:standby={isStandby}
+									style={isStandby ? `animation-delay: ${index * 100}ms` : ''}
 								/>
 							{/each}
 						</div>
 					{:else}
 						<div class="line-clamp-1 text-sm font-medium">
 							{#if LIVEKIT_ENABLED}
-								{#if lkConnecting}
-									{$i18n.t('Connecting...')}
-								{:else if lkConnected}
+								{#if lkConnectionState === ConnectionState.Disconnected}
+                                    <div class="flex items-center gap-2 w-full">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 translate-y-[0.5px] text-rose-500">
+                                            <path d="m12.707,12.707l-2.293,2.293-1.414-1.414,2.293-2.293c.391-.391.391-1.023,0-1.414s-1.023-.391-1.414,0l-2.293,2.293-1.879-1.879c-.391-.391-1.023-.391-1.414,0s-.391,1.023,0,1.414l.352.352-1.134,1.135c-1.77,1.769-1.982,4.515-.638,6.519l-2.58,2.58c-.391.391-.391,1.023,0,1.414.195.195.451.293.707.293s.512-.098.707-.293l2.58-2.58c.865.58,1.868.871,2.871.871,1.321,0,2.642-.503,3.647-1.509l1.135-1.134.352.352c.195.195.451.293.707.293s.512-.098.707-.293c.391-.391.391-1.023,0-1.414l-1.879-1.879,2.293-2.293c.391-.391.391-1.023,0-1.414s-1.023-.391-1.414,0ZM23.707.293c-.391-.391-1.023-.391-1.414,0l-2.58,2.58c-2.004-1.344-4.749-1.132-6.519.638l-1.135,1.135-.353-.353c-.391-.391-1.023-.391-1.414,0s-.391,1.023,0,1.414l8,8c.195.195.451.293.707.293s.512-.098.707-.293c.391-.391.391-1.023,0-1.414l-.353-.353,1.135-1.135c1.77-1.769,1.982-4.515.638-6.519l2.58-2.58c.391-.391.391-1.023,0-1.414Z"/>
+                                        </svg>
+                                        {$i18n.t('Disconnected')}
+                                    </div>
+								{:else if lkConnectionState === ConnectionState.Connecting}
+                                    <div class="flex items-center gap-2 w-full">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 translate-y-[0.5px] text-amber-500">
+                                            <path d="m12.707,12.707l-2.293,2.293-1.414-1.414,2.293-2.293c.391-.391.391-1.023,0-1.414s-1.023-.391-1.414,0l-2.293,2.293-1.879-1.879c-.391-.391-1.023-.391-1.414,0s-.391,1.023,0,1.414l.352.352-1.134,1.135c-1.77,1.769-1.982,4.515-.638,6.519l-2.58,2.58c-.391.391-.391,1.023,0,1.414.195.195.451.293.707.293s.512-.098.707-.293l2.58-2.58c.865.58,1.868.871,2.871.871,1.321,0,2.642-.503,3.647-1.509l1.135-1.134.352.352c.195.195.451.293.707.293s.512-.098.707-.293c.391-.391.391-1.023,0-1.414l-1.879-1.879,2.293-2.293c.391-.391.391-1.023,0-1.414s-1.023-.391-1.414,0ZM23.707.293c-.391-.391-1.023-.391-1.414,0l-2.58,2.58c-2.004-1.344-4.749-1.132-6.519.638l-1.135,1.135-.353-.353c-.391-.391-1.023-.391-1.414,0s-.391,1.023,0,1.414l8,8c.195.195.451.293.707.293s.512-.098.707-.293c.391-.391.391-1.023,0-1.414l-.353-.353,1.135-1.135c1.77-1.769,1.982-4.515.638-6.519l2.58-2.58c.391-.391.391-1.023,0-1.414Z"/>
+                                        </svg>
+                                        {$i18n.t('Connecting...')}
+                                    </div>
+								{:else if lkConnectionState === ConnectionState.Connected}
 									{#if assistantSpeaking}
-										{$i18n.t('Tap to interrupt')}
+                                        <div class="flex items-center gap-2 w-full">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-rose-500">
+                                                <path d="M12,0A12,12,0,1,0,24,12,12,12,0,0,0,12,0Zm4.707,15.293-1.414,1.414L12,13.414,8.707,16.707,7.293,15.293,10.586,12,7.293,8.707,8.707,7.293,12,10.586l3.293-3.293,1.414,1.414L13.414,12Z"/>
+                                            </svg>
+                                            {$i18n.t('Tap to interrupt')}
+                                        </div>
 									{:else if lkThinking}
-										{$i18n.t('Thinking...')}
-									{:else}
-										{$i18n.t('Listening...')}
+                                        <div class="flex items-center gap-2 w-full">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="512" height="512" fill="currentColor" class="w-5 h-5 translate-y-[0.5px] text-indigo-500">
+                                                <path d="M3,22.5c0,.828-.672,1.5-1.5,1.5s-1.5-.672-1.5-1.5,.672-1.5,1.5-1.5,1.5,.672,1.5,1.5Zm3-5.5c-1.105,0-2,.895-2,2s.895,2,2,2,2-.895,2-2-.895-2-2-2Zm9.845-1.42c.699,.279,1.422,.42,2.155,.42,3.309,0,6-2.691,6-6,0-2.733-1.823-5.069-4.416-5.772-.938-2.518-3.356-4.228-6.084-4.228-1.879,0-3.652,.819-4.88,2.223-.524-.147-1.067-.223-1.62-.223C3.691,2,1,4.691,1,8c0,3.242,2.585,5.892,5.802,5.997,1.062,1.845,3.032,3.003,5.198,3.003,1.426,0,2.767-.499,3.845-1.42Z"/>
+                                            </svg>
+                                            {$i18n.t('Thinking...')}
+                                        </div>
 									{/if}
 								{/if}
 							{:else}
@@ -1214,28 +1147,51 @@
 	/* Horizontal audio level meter bars */
 	.audio-bar {
 		width: 15px;
-		height: 10px;
-		border: lightgrey solid 1px;
+		height: 5px;
+        border: darkorange solid 1px;
+        background-color: orange;
+        opacity: 0.2;
 		transition: background-color 100ms ease-out, border-color 100ms ease-out;
 	}
+
+    .audio-bar.teal {
+        border: seagreen solid 1px;
+        background-color: lightseagreen;
+        opacity: 0.2;
+    }
 
 	/* Filled state - bar is active */
 	.audio-bar.teal.filled {
         background-color: lightseagreen;
         border-color: lightseagreen;
+        opacity: 1;
 	}
 
 	.audio-bar.filled {
         background-color: orange;
         border-color: orange;
+        opacity: 1;
 	}
 
+	/* Standby animation when no audio input */
+	.audio-bar.standby {
+		animation: standby-wave 1.5s ease-in-out infinite;
+	}
+
+	@keyframes standby-wave {
+		0%, 100% {
+			opacity: 0.15;
+		}
+		50% {
+			opacity: 0.5;
+		}
+	}
 
 	/* Mobile responsiveness - narrower bars */
 	@media (max-width: 640px) {
 		.audio-bar {
 			width: 15px;
-			height: 10px;
+			height: 5px;
 		}
 	}
 
@@ -1243,7 +1199,7 @@
 	@media (min-width: 768px) {
 		.audio-bar {
 			width: 15px;
-			height: 10px;
+			height: 5px;
 		}
 	}
 </style>

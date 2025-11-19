@@ -352,6 +352,7 @@
 	"Disable Image Extraction": "",
 	"Disable image extraction from the PDF. If Use LLM is enabled, images will be automatically captioned. Defaults to False.": "",
 	"Disabled": "Deaktiviert",
+	"Disconnected": "Getrennt",
 	"Discover a function": "Entdecken Sie weitere Funktionen",
 	"Discover a model": "Entdecken Sie weitere Modelle",
 	"Discover a prompt": "Entdecken Sie weitere Prompts",

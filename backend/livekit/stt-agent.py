@@ -31,10 +31,6 @@ async def entrypoint(ctx: agents.JobContext):
             sample_rate=16000,
             num_channels=1
         )
-        await ctx.room.local_participant.publish_data(
-            "connected",
-            topic="system"
-        )
 
         async with asyncio.TaskGroup() as tg:
             # Create task for processing STT stream
