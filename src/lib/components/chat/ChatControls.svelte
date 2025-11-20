@@ -35,8 +35,6 @@
 
     export let lkConnectionState: ConnectionState | null = ConnectionState.Disconnected;
     export let lkMicLevel: number;
-    export let lkMicActive: boolean;
-
 
 	let mediaQuery;
 	let largeScreen = false;
@@ -170,7 +168,6 @@
 								{eventTarget}
                                 {lkConnectionState}
                                 {lkMicLevel}
-                                bind:lkMicActive
                                 on:startLivekitAsr={() => dispatch('startLivekitAsr')}
                                 on:stopLivekitAsr={() => dispatch('stopLivekitAsr')}
 								on:close={() => showControls.set(false)}
@@ -254,7 +251,6 @@
 									{eventTarget}
                                     {lkConnectionState}
                                     {lkMicLevel}
-                                    bind:lkMicActive
                                     on:startLivekitAsr={() => dispatch('startLivekitAsr')}
                                     on:stopLivekitAsr={() => dispatch('stopLivekitAsr')}
                                     on:close={() => showControls.set(false)}

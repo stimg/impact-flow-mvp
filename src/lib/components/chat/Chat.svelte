@@ -289,8 +289,6 @@
                     const toastType = data?.type ?? 'info';
                     const toastContent = data?.content ?? '';
 
-                    lkMicActive = true;
-
                     if (toastType === 'success') {
                         toast.success(toastContent);
                     } else if (toastType === 'error') {
@@ -384,14 +382,13 @@
     let lkConnectionState: ConnectionState = ConnectionState.Disconnected;
     let lkMicStream: MediaStream | null = null;
     let lkMicLevel = 0;
-    let lkMicActive = false;
     const setLkMicLevel = (level: number) => lkMicLevel = level;
 
     const processMicLevel = () => {
 
         if (!lkMicStream) return;
 
-        console.log('[CallOverlay] Starting real-time audio visualizer');
+        console.log('[Chat] Starting real-time audio visualizer');
 
         const audioContext = new AudioContext();
         const audioStreamSource = audioContext.createMediaStreamSource(lkMicStream);
@@ -404,7 +401,7 @@
         const domainData = new Uint8Array(bufferLength);
 
         const processFrame = () => {
-            if (lkConnectionState !== ConnectionState.Connected || !lkMicActive) return;
+            if (lkConnectionState !== ConnectionState.Connected) return;
 
             window.requestAnimationFrame(processFrame);
 
@@ -459,15 +456,14 @@
             // LiveKit connection & publish
             const room = new Room({adaptiveStream: true, dynacast: true});
 
-            room.on(RoomEvent.ConnectionStateChanged, (ConnectionState) => {
-                lkConnectionState = ConnectionState;
-                console.log('[FE] Connection state changed:', ConnectionState);
+            room.on(RoomEvent.ConnectionStateChanged, (state) => {
+                lkConnectionState = state;
+                console.log('[FE] Connection state changed:', state);
             })
 
             room.on(RoomEvent.Connected, () => {
                 prompt = '';
                 lkRoom = room;
-                lkMicActive = true;
                 processMicLevel();
                 console.log(`[FE] connected: room: ${room.name}, identity: ${room.localParticipant.identity}`);
                 toast.success($i18n.t('Listening...'));
@@ -530,6 +526,12 @@
                 }
             }
             lkRoom = null;
+
+            if (lkMicStream) {
+                lkMicStream.getTracks().forEach(track => track.stop());
+                lkMicStream = null;
+            }
+
         } finally {
             console.log('[Chat] LiveKit disconnected from room.');
         }
@@ -1547,7 +1549,9 @@
 
         saveSessionSelectedModels();
 
-        lkMicActive = false;
+        if (!$showCallOverlay) {
+            await stopLivekitAsr();
+        }
         await sendPrompt(history, userPrompt, userMessageId, {newChat: true});
     };
 
@@ -2227,7 +2231,6 @@
                                         {createMessagePair}
                                         {lkConnectionState}
                                         {lkMicLevel}
-                                        bind:lkMicActive
                                         onChange={(input) => {
                                         if (!$temporaryChatEnabled) {
                                             if (input.prompt !== null) {
@@ -2293,7 +2296,6 @@
                                         toolServers={$toolServers}
                                         {lkConnectionState}
                                         {lkMicLevel}
-                                        bind:lkMicActive
                                         {stopResponse}
                                         {createMessagePair}
                                         on:upload={async (e) => {
@@ -2349,7 +2351,6 @@
                         {eventTarget}
                         {lkConnectionState}
                         {lkMicLevel}
-                        bind:lkMicActive
                         on:startLivekitAsr={() => {
                       startLivekitAsr();
                     }}

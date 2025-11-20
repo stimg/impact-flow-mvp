@@ -8,8 +8,13 @@
 	const dispatch = createEventDispatcher();
 
 	import { config, user, models as _models, temporaryChatEnabled } from '$lib/stores';
-	import {sanitizeResponseContent, extractCurlyBraceWords, getUserNameFromFullName} from '$lib/utils';
+	import {
+		sanitizeResponseContent,
+		extractCurlyBraceWords,
+		getUserNameFromFullName
+	} from '$lib/utils';
 	import { WEBUI_BASE_URL } from '$lib/constants';
+	import { ConnectionState } from 'livekit-client';
 
 	import Suggestions from './Suggestions.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
@@ -43,10 +48,10 @@
 
 	export let toolServers = [];
 
-    export let lkConnecting: boolean = false;
-    export let lkConnected: boolean = false;
+    export let lkConnectionState: ConnectionState;
+    export let lkMicLevel: number;
 
-    let models = [];
+	let models = [];
 
 	const selectSuggestionPrompt = async (p) => {
 		let text = p;
@@ -201,17 +206,20 @@
 				</div>
 			</div>
 
-			<div class="w-full mx-auto max-w-2xl font-primary mt-2" in:fade={{ duration: 200, delay: 200 }}>
+			<div
+				class="w-full mx-auto max-w-2xl font-primary mt-2"
+				in:fade={{ duration: 200, delay: 200 }}
+			>
 				<div class="mx-3">
 					<Suggestions
 						suggestionPrompts={atSelectedModel?.info?.meta?.suggestion_prompts ??
-					models[selectedModelIdx]?.info?.meta?.suggestion_prompts ??
-					$config?.default_prompt_suggestions ??
-					[]}
+							models[selectedModelIdx]?.info?.meta?.suggestion_prompts ??
+							$config?.default_prompt_suggestions ??
+							[]}
 						inputValue={prompt}
 						on:select={(e) => {
-					selectSuggestionPrompt(e.detail);
-				}}
+							selectSuggestionPrompt(e.detail);
+						}}
 					/>
 				</div>
 			</div>
@@ -231,8 +239,8 @@
 					bind:atSelectedModel
 					{toolServers}
 					{transparentBackground}
-                    lkConnecting={lkConnecting}
-                    lkConnected={lkConnected}
+					{lkConnectionState}
+					{lkMicLevel}
 					{stopResponse}
 					{createMessagePair}
 					placeholder={$i18n.t('How can I help you today?', { username })}
@@ -251,13 +259,13 @@
 					on:submit={(e) => {
 						dispatch('submit', e.detail);
 					}}
-                    on:startLivekitAsr={() => {
-                        dispatch('startLivekitAsr');
-                    }}
-                    on:stopLivekitAsr={() => {
-                        dispatch('stopLivekitAsr');
-                    }}
-            />
+					on:startLivekitAsr={() => {
+						dispatch('startLivekitAsr');
+					}}
+					on:stopLivekitAsr={() => {
+						dispatch('stopLivekitAsr');
+					}}
+				/>
 			</div>
 		</div>
 	</div>

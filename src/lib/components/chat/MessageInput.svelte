@@ -11,19 +11,22 @@
 	import { onMount, tick, getContext, createEventDispatcher, onDestroy } from 'svelte';
 	const dispatch = createEventDispatcher();
 
-    import {
-        type Model,
-        mobile,
-        settings,
-        showSidebar,
-        models,
-        config,
-        showCallOverlay,
-        tools,
-        user as _user,
-        showControls,
-        TTSWorker, showOverview, showArtifacts, chats
-    } from '$lib/stores';
+	import {
+		type Model,
+		mobile,
+		settings,
+		showSidebar,
+		models,
+		config,
+		showCallOverlay,
+		tools,
+		user as _user,
+		showControls,
+		TTSWorker,
+		showOverview,
+		showArtifacts,
+		chats
+	} from '$lib/stores';
 
 	import {
 		blobToFile,
@@ -32,11 +35,15 @@
 		extractCurlyBraceWords
 	} from '$lib/utils';
 	import { uploadFile } from '$lib/apis/files';
-    import {generateAutoCompletion} from '$lib/apis';
-    import {getLivekitToken} from '$lib/apis/livekit';
+	import { generateAutoCompletion } from '$lib/apis';
 	import { deleteFileById } from '$lib/apis/files';
 
 	import { WEBUI_BASE_URL, WEBUI_API_BASE_URL } from '$lib/constants';
+
+	const AUDIO_BARS_COUNT = 12;
+	const AUDIO_BARS = Array(AUDIO_BARS_COUNT)
+		.fill(0)
+		.map((_, i) => i); // Cache array
 
 	import InputMenu from './MessageInput/InputMenu.svelte';
 	import VoiceRecording from './MessageInput/VoiceRecording.svelte';
@@ -61,8 +68,8 @@
 
 	const i18n = getContext('i18n');
 
-    import {ConnectionState} from 'livekit-client';
-    import {page} from "$app/stores";
+	import { ConnectionState } from 'livekit-client';
+	import { page } from '$app/stores';
 
 	export let transparentBackground = false;
 
@@ -91,11 +98,10 @@
 
 	export let imageGenerationEnabled = false;
 	export let webSearchEnabled = false;
-    export let codeInterpreterEnabled = false;
+	export let codeInterpreterEnabled = false;
 
-    export let lkConnectionState: ConnectionState;
-    export let lkMicLevel: number;
-    export let lkMicActive: boolean;
+	export let lkConnectionState: ConnectionState;
+	export let lkMicLevel: number;
 
 	$: onChange({
 		prompt,
@@ -204,10 +210,10 @@
 		});
 	};
 
-    // LiveKit ASR state
-    const LIVEKIT_ENABLED = $config.audio.stt.engine === 'livekit';
+	// LiveKit ASR state
+	const LIVEKIT_ENABLED = $config.audio.stt.engine === 'livekit';
 
-    const screenCaptureHandler = async () => {
+	const screenCaptureHandler = async () => {
 		try {
 			// Request screen media
 			const mediaStream = await navigator.mediaDevices.getDisplayMedia({
@@ -464,7 +470,7 @@
 		shiftKey = false;
 	};
 
-    onMount(async () => {
+	onMount(async () => {
 		loaded = true;
 
 		window.setTimeout(() => {
@@ -1410,7 +1416,7 @@
 									</div>
 
 									<div class="self-end flex space-x-1 mr-1 shrink-0">
-										{#if (!history?.currentId || history.messages[history.currentId]?.done == true) && ($_user?.role === 'admin' || ($_user?.permissions?.chat?.stt ?? true))}
+										{#if !$showCallOverlay && (!history?.currentId || history.messages[history.currentId]?.done == true) && ($_user?.role === 'admin' || ($_user?.permissions?.chat?.stt ?? true))}
 											<!-- {$i18n.t('Record voice')} -->
 											<Tooltip content={$i18n.t('Dictate')}>
 												<button
@@ -1420,19 +1426,26 @@
 													on:click={async () => {
 														if (LIVEKIT_ENABLED) {
 															if (lkConnectionState !== ConnectionState.Connected) {
-                                                                dispatch('startLivekitAsr');
-                                                                recording = true;
-                                                            } else {
-                                                               dispatch('stopLivekitAsr');
-                                                               recording = false;
-                                                            }
+																dispatch('startLivekitAsr');
+																recording = true;
+															} else {
+																dispatch('stopLivekitAsr');
+																recording = false;
+															}
 														} else {
 															// fallback: simple mic permission + toggle recording UI
 															try {
-																let stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch((err) => {
-																	toast.error($i18n.t(`Permission denied when accessing microphone: {{error}}`, { error: err }));
-																	return null;
-																});
+																let stream = await navigator.mediaDevices
+																	.getUserMedia({ audio: true })
+																	.catch((err) => {
+																		toast.error(
+																			$i18n.t(
+																				`Permission denied when accessing microphone: {{error}}`,
+																				{ error: err }
+																			)
+																		);
+																		return null;
+																	});
 																if (stream) {
 																	recording = true;
 																	const tracks = stream.getTracks();
@@ -1448,29 +1461,72 @@
 												>
 													{#if LIVEKIT_ENABLED}
 														{#if lkConnectionState === ConnectionState.Connecting}
-                                                            <!-- Mic icon yellow -->
-                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 translate-y-[0.5px] text-amber-500">
-                                                                <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
-                                                                <path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z" />
-                                                            </svg>
-                                                        {:else if lkConnectionState === ConnectionState.Connected}
-                                                            <!-- Mic icon red -->
-                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 translate-y-[0.5px] text-rose-500">
-                                                                <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
-                                                                <path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z" />
-                                                            </svg>
-                                                        {:else}
-                                                            <!-- Mic icon green-->
-                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 translate-y-[0.5px]">
-                                                                <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
-                                                                <path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z" />
-                                                            </svg>
-                                                        {/if}
+															<!-- Mic icon yellow -->
+															<svg
+																xmlns="http://www.w3.org/2000/svg"
+																viewBox="0 0 20 20"
+																fill="currentColor"
+																class="w-5 h-5 translate-y-[0.5px] text-amber-500"
+															>
+																<path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
+																<path
+																	d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z"
+																/>
+															</svg>
+														{:else if lkConnectionState === ConnectionState.Connected}
+															<!-- Mic icon red -->
+															<div class="flex items-center justify-center gap-0.5 h-5 px-1">
+																<svg
+																	xmlns="http://www.w3.org/2000/svg"
+																	viewBox="0 0 20 20"
+																	fill="currentColor"
+																	class="w-5 h-5 translate-y-[0.5px] text-rose-500"
+																>
+																	<path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z"></path>
+																	<path
+																		d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z"
+																	></path>
+																</svg>
+																{#each AUDIO_BARS as index}
+																	{@const isFilled = lkMicLevel * AUDIO_BARS_COUNT >= index + 1}
+																	{@const isTeal = index < AUDIO_BARS_COUNT - AUDIO_BARS_COUNT / 4}
+																	{@const isStandby = lkMicLevel === 0}
+																	<div
+																		class="audio-bar"
+																		class:filled={isFilled}
+																		class:teal={isTeal}
+																		class:yellow={!isTeal}
+																		class:standby={isStandby}
+																		style={isStandby ? `animation-delay: ${index * 100}ms` : ''}
+																	/>
+																{/each}
+															</div>
+														{:else}
+															<!-- Mic icon green-->
+															<svg
+																xmlns="http://www.w3.org/2000/svg"
+																viewBox="0 0 20 20"
+																fill="currentColor"
+																class="w-5 h-5 translate-y-[0.5px]"
+															>
+																<path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
+																<path
+																	d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z"
+																/>
+															</svg>
+														{/if}
 													{:else}
 														<!-- Mic icon -->
-														<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 translate-y-[0.5px]">
+														<svg
+															xmlns="http://www.w3.org/2000/svg"
+															viewBox="0 0 20 20"
+															fill="currentColor"
+															class="w-5 h-5 translate-y-[0.5px]"
+														>
 															<path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
-															<path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z" />
+															<path
+																d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z"
+															/>
 														</svg>
 													{/if}
 												</button>
@@ -1480,7 +1536,12 @@
 										{#if (taskIds && taskIds.length > 0) || (history.currentId && history.messages[history.currentId]?.done != true)}
 											<div class=" flex items-center">
 												<Tooltip content={$i18n.t('Stop')}>
-													<button class="svg-button" on:click={() => { stopResponse(); }}>
+													<button
+														class="svg-button"
+														on:click={() => {
+															stopResponse();
+														}}
+													>
 														<svg
 															xmlns="http://www.w3.org/2000/svg"
 															viewBox="0 0 24 24"
@@ -1497,66 +1558,80 @@
 												</Tooltip>
 											</div>
 										{:else if prompt === '' && files.length === 0 && ($_user?.role === 'admin' || ($_user?.permissions?.chat?.call ?? true))}
-    											<div class=" flex items-center">
-     												<!-- {$i18n.t('Call')} -->
-     												<Tooltip content={$i18n.t('Voice mode')}>
-                                                        <button
-                                                          class="button !px-1.5"
-                                                          type="button"
-                                                          on:click={async () => {
-                                                            if (selectedModels.length > 1) {
-                                                              toast.error($i18n.t('Select only one model to call'));
-                                                              return;
-                                                            }
+											<div class=" flex items-center">
+												<!-- {$i18n.t('Call')} -->
+												<Tooltip content={$i18n.t('Voice mode')}>
+													<button
+														class="button !px-1.5"
+														type="button"
+														on:click={async () => {
+															if (selectedModels.length > 1) {
+																toast.error($i18n.t('Select only one model to call'));
+																return;
+															}
 
-                                                            if (LIVEKIT_ENABLED) {
-                                                              if (lkConnectionState !== ConnectionState.Connected) {
-                                                                recording = true;
-                                                                showCallOverlay.set(true);
-                                                                showControls.set(true);
-                                                              } else {
-                                                                recording = false;
-                                                                showControls.set(false);
-                                                                showCallOverlay.set(false);
-                                                              }
-                                                            } else {
-                                                              if ($config.e === 'web') {
-                                                                toast.error($i18n.t('Call feature is not supported when using Web STT engine'));
-                                                                return;
-                                                              }
-                                                              try {
-                                                                let stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                                                                if (stream) {
-                                                                  const tracks = stream.getTracks();
-                                                                  tracks.forEach((track) => track.stop());
-                                                                }
-                                                                stream = null;
-                                                                if ($settings.audio?.tts?.engine === 'browser-kokoro') {
-                                                                  if (!$TTSWorker) {
-                                                                    TTSWorker.set(
-                                                                      new KokoroWorker({
-                                                                        dtype: $settings.audio?.tts?.engineConfig?.dtype ?? 'fp32'
-                                                                      })
-                                                                    );
-                                                                    await $TTSWorker.init();
-                                                                  }
-                                                                }
-                                                                showCallOverlay.set(true);
-                                                                showControls.set(true);
-                                                              } catch (err) {
-                                                                toast.error($i18n.t('Permission denied when accessing media devices'));
-                                                              }
-                                                            }
-                                                          }}
-                                                          aria-label="Call"
-                                                        >
-                                                          <Headphone className="size-5" />
-                                                        </button>     												</Tooltip>
-     											</div>
-     									{:else}
+															if (LIVEKIT_ENABLED) {
+																if (lkConnectionState !== ConnectionState.Connected) {
+																	recording = true;
+																	showCallOverlay.set(true);
+																	showControls.set(true);
+																} else {
+																	recording = false;
+																	showControls.set(false);
+																	showCallOverlay.set(false);
+																}
+															} else {
+																if ($config.e === 'web') {
+																	toast.error(
+																		$i18n.t(
+																			'Call feature is not supported when using Web STT engine'
+																		)
+																	);
+																	return;
+																}
+																try {
+																	let stream = await navigator.mediaDevices.getUserMedia({
+																		audio: true
+																	});
+																	if (stream) {
+																		const tracks = stream.getTracks();
+																		tracks.forEach((track) => track.stop());
+																	}
+																	stream = null;
+																	if ($settings.audio?.tts?.engine === 'browser-kokoro') {
+																		if (!$TTSWorker) {
+																			TTSWorker.set(
+																				new KokoroWorker({
+																					dtype: $settings.audio?.tts?.engineConfig?.dtype ?? 'fp32'
+																				})
+																			);
+																			await $TTSWorker.init();
+																		}
+																	}
+																	showCallOverlay.set(true);
+																	showControls.set(true);
+																} catch (err) {
+																	toast.error(
+																		$i18n.t('Permission denied when accessing media devices')
+																	);
+																}
+															}
+														}}
+														aria-label="Call"
+													>
+														<Headphone className="size-5" />
+													</button>
+												</Tooltip>
+											</div>
+										{:else}
 											<div class=" flex items-center">
 												<Tooltip content={$i18n.t('Send message')}>
-													<button id="send-message-button" class="button !px-1.5" type="submit" disabled={prompt === '' && files.length === 0}>
+													<button
+														id="send-message-button"
+														class="button !px-1.5"
+														type="submit"
+														disabled={prompt === '' && files.length === 0}
+													>
 														<svg
 															xmlns="http://www.w3.org/2000/svg"
 															viewBox="0 0 16 16"
@@ -1592,4 +1667,50 @@
 	</div>
 {/if}
 
-																							
+<style>
+	/* Horizontal audio level meter bars */
+	.audio-bar {
+		width: 4px;
+		height: 12px;
+		border: darkorange solid 1px;
+		background-color: orange;
+		opacity: 0.2;
+		transition:
+			background-color 100ms ease-out,
+			border-color 100ms ease-out;
+	}
+
+	.audio-bar.teal {
+		border: seagreen solid 1px;
+		background-color: lightseagreen;
+		opacity: 0.2;
+	}
+
+	/* Filled state - bar is active */
+	.audio-bar.teal.filled {
+		background-color: lightseagreen;
+		border-color: lightseagreen;
+		opacity: 1;
+	}
+
+	.audio-bar.filled {
+		background-color: orange;
+		border-color: orange;
+		opacity: 1;
+	}
+
+	/* Standby animation when no audio input */
+	.audio-bar.standby {
+		animation: standby-wave 1.5s ease-in-out infinite;
+	}
+
+	@keyframes standby-wave {
+		0%,
+		100% {
+			opacity: 0.15;
+		}
+		50% {
+			opacity: 0.5;
+		}
+	}
+</style>
