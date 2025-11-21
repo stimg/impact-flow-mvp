@@ -14,6 +14,7 @@
 	import EllipsisVertical from '../icons/EllipsisVertical.svelte';
 	import Artifacts from './Artifacts.svelte';
 	import { min } from '@floating-ui/utils';
+    import {ConnectionState} from "livekit-client";
 
 	export let history;
 	export let models = [];
@@ -32,8 +33,8 @@
 
 	export let pane;
 
-    export let lkConnecting: boolean = false;
-    export let lkConnected: boolean = false;
+    export let lkConnectionState: ConnectionState | null = ConnectionState.Disconnected;
+    export let lkMicLevel: number;
 
 	let mediaQuery;
 	let largeScreen = false;
@@ -165,8 +166,8 @@
 								{modelId}
 								{chatId}
 								{eventTarget}
-                                lkConnecting={lkConnecting}
-                                lkConnected={lkConnected}
+                                {lkConnectionState}
+                                {lkMicLevel}
                                 on:startLivekitAsr={() => dispatch('startLivekitAsr')}
                                 on:stopLivekitAsr={() => dispatch('stopLivekitAsr')}
 								on:close={() => showControls.set(false)}
@@ -248,9 +249,9 @@
 									{modelId}
 									{chatId}
 									{eventTarget}
-                                    lkConnecting={lkConnecting}
-                                    lkConnected={lkConnected}
-                                        on:startLivekitAsr={() => dispatch('startLivekitAsr')}
+                                    {lkConnectionState}
+                                    {lkMicLevel}
+                                    on:startLivekitAsr={() => dispatch('startLivekitAsr')}
                                     on:stopLivekitAsr={() => dispatch('stopLivekitAsr')}
                                     on:close={() => showControls.set(false)}
 								/>

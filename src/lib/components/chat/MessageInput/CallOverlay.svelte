@@ -13,6 +13,7 @@
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import VideoInputMenu from './CallOverlay/VideoInputMenu.svelte';
 	import { KokoroWorker } from '$lib/workers/KokoroWorker';
+	import { ConnectionState } from 'livekit-client';
 
 	const i18n = getContext('i18n');
 
@@ -23,8 +24,8 @@
 	export let chatId;
 	export let modelId;
 
-    export let lkConnecting: boolean = false;
-    export let lkConnected: boolean = false;
+	export let lkConnectionState: ConnectionState | null = ConnectionState.Disconnected;
+	export let lkMicLevel: number;
 
 	let wakeLock = null;
 
@@ -49,12 +50,20 @@
 	let videoInputDevices = [];
 	let selectedVideoInputDeviceId = null;
 
-    let lkAutoSubmitTimeout = null;
-    let lkThinking = null;
-    let userPrompt = '';
+	let userPrompt = '';
+	let lkAutoSubmitTimeout = null;
+	let lkThinking = false;
+	// let lkAudioLevel = 0;
 
-    const LIVEKIT_ENABLED = true; // $config.audio.stt.engine === 'livekit';
-    const LIVEKIT_AUTO_SUBMIT_DELAY = 500; // 3 seconds
+	const LIVEKIT_ENABLED = $config.audio.stt.engine === 'livekit';
+	const LIVEKIT_AUTO_SUBMIT_DELAY = 500;
+	const AUDIO_BARS_COUNT = 12;
+	const AUDIO_BARS = Array(AUDIO_BARS_COUNT)
+		.fill(0)
+		.map((_, i) => i); // Cache array
+
+	// Reactive: Start/stop visualizer based on LiveKit connection and state
+	$: if (LIVEKIT_ENABLED) {}
 
 	const getVideoInputDevices = async () => {
 		const devices = await navigator.mediaDevices.enumerateDevices();
@@ -155,31 +164,30 @@
 	};
 
 	const MIN_DECIBELS = -55;
-	const VISUALIZER_BUFFER_LENGTH = 300;
 
 	const transcribeHandler = async (audioBlob) => {
 		// Create a blob from the audio chunks
 
-        await tick();
-        const file = blobToFile(audioBlob, 'recording.wav');
+		await tick();
+		const file = blobToFile(audioBlob, 'recording.wav');
 
-        const res = await transcribeAudio(
-            localStorage.token,
-            file,
-            $settings?.audio?.stt?.language
-        ).catch((error) => {
-            toast.error(`${error}`);
-            return null;
-        });
+		const res = await transcribeAudio(
+			localStorage.token,
+			file,
+			$settings?.audio?.stt?.language
+		).catch((error) => {
+			toast.error(`${error}`);
+			return null;
+		});
 
-        if (res) {
-            console.log(res.text);
+		if (res) {
+			console.log(res.text);
 
-            if (res.text !== '') {
-                const _responses = await submitPrompt(res.text, { _raw: true });
-                console.log(_responses);
-            }
-        }
+			if (res.text !== '') {
+				const _responses = await submitPrompt(res.text, { _raw: true });
+				console.log(_responses);
+			}
+		}
 	};
 
 	const stopRecordingCallback = async (_continue = true) => {
@@ -230,54 +238,54 @@
 	};
 
 	const startRecording = async () => {
-        if ($showCallOverlay) {
-            if (!audioStream) {
-                audioStream = await navigator.mediaDevices.getUserMedia({
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true
-                    }
-                });
-            }
-            mediaRecorder = new MediaRecorder(audioStream);
+		if ($showCallOverlay) {
+			if (!audioStream) {
+				audioStream = await navigator.mediaDevices.getUserMedia({
+					audio: {
+						echoCancellation: true,
+						noiseSuppression: true,
+						autoGainControl: true
+					}
+				});
+			}
+			mediaRecorder = new MediaRecorder(audioStream);
 
-            mediaRecorder.onstart = () => {
-                console.log('Recording started');
-                audioChunks = [];
-            };
+			mediaRecorder.onstart = () => {
+				console.log('Recording started');
+				audioChunks = [];
+			};
 
-            mediaRecorder.ondataavailable = (event) => {
-                if (hasStartedSpeaking) {
-                    audioChunks.push(event.data);
-                }
-            };
+			mediaRecorder.ondataavailable = (event) => {
+				if (hasStartedSpeaking) {
+					audioChunks.push(event.data);
+				}
+			};
 
-            mediaRecorder.onstop = (e) => {
-                console.log('Recording stopped', audioStream, e);
-                stopRecordingCallback();
-            };
+			mediaRecorder.onstop = (e) => {
+				console.log('Recording stopped', audioStream, e);
+				stopRecordingCallback();
+			};
 
-            analyseAudio(audioStream);
-        }
+			analyseAudio(audioStream);
+		}
 	};
 
 	const stopAudioStream = async () => {
-        try {
-            if (mediaRecorder) {
-                mediaRecorder.stop();
-            }
-        } catch (error) {
-            console.log('Error stopping audio stream:', error);
-        }
+		try {
+			if (mediaRecorder) {
+				mediaRecorder.stop();
+			}
+		} catch (error) {
+			console.log('Error stopping audio stream:', error);
+		}
 
-        if (!audioStream) return;
+		if (!audioStream) return;
 
-        audioStream.getAudioTracks().forEach(function (track) {
-            track.stop();
-        });
+		audioStream.getAudioTracks().forEach(function (track) {
+			track.stop();
+		});
 
-        audioStream = null;
+		audioStream = null;
 	};
 
 	// Function to calculate the RMS level from time domain data
@@ -457,7 +465,7 @@
 			audioElement.pause();
 			audioElement.currentTime = 0;
 		}
-    };
+	};
 
 	let audioAbortController = new AbortController();
 
@@ -544,9 +552,9 @@
 								`Playing audio for content: ${content}`,
 								`Audio agent: ${$config.audio.tts.engine}`
 							);
-                            assistantSpeaking = true;
-                            lkThinking = false;
-                            console.log('-----> START SPEAKING <-----')
+							assistantSpeaking = true;
+							lkThinking = false;
+							console.log('-----> START SPEAKING <-----');
 
 							const audio = audioCache.get(content);
 							await playAudio(audio); // Here ensure that playAudio is indeed correct method to execute
@@ -614,7 +622,7 @@
 				console.log(content);
 
 				fetchAudio(content);
-                console.log('-----> FETCHING AUDIO: ', content, ' <-----')
+				console.log('-----> FETCHING AUDIO: ', content, ' <-----');
 			} catch (error) {
 				console.error('Failed to fetch or play audio:', error);
 			}
@@ -630,8 +638,12 @@
 	};
 
 	const transcriptReadyHandler = async (e) => {
-		userPrompt = e.detail.text;
-		console.log('[CallOverlay] Transcript ready:', userPrompt);
+        // Ignore transcript if prompt already sent, but no answer from chat received.
+		if (lkThinking) return;
+
+        userPrompt = e.detail.text;
+
+		console.log('[CallOverlay] 🎤 TRANSCRIPT READY:', userPrompt);
 
 		// Interrupt assistant if it's currently speaking
 		if (assistantSpeaking) {
@@ -641,18 +653,16 @@
 
 		// Clear any existing auto-submit timeout
 		if (lkAutoSubmitTimeout) {
-			console.log('[CallOverlay] Clearing previous auto-submit timeout');
 			clearTimeout(lkAutoSubmitTimeout);
 			lkAutoSubmitTimeout = null;
 		}
 
-		// Set new timeout for auto-submit after 3 seconds of silence
-		console.log('[CallOverlay] Setting new auto-submit timeout (3 seconds)');
+		// Set new timeout for auto-submit after delay
 		lkAutoSubmitTimeout = setTimeout(() => {
-			console.log('[CallOverlay] Auto-submitting prompt after 3 seconds of silence');
+			console.log('[CallOverlay] 📤 Auto-submitting prompt');
 			submitPrompt(userPrompt);
 			lkAutoSubmitTimeout = null;
-            lkThinking = true;
+			lkThinking = true;
 		}, LIVEKIT_AUTO_SUBMIT_DELAY);
 	};
 
@@ -687,16 +697,16 @@
 
 		model = $models.find((m) => m.id === modelId);
 
-        if (LIVEKIT_ENABLED) {
-            // Start LiveKit automatically when overlay opens
-            console.log('[CallOverlay] Starting LiveKit ASR automatically');
-            dispatch('startLivekitAsr');
+		if (LIVEKIT_ENABLED) {
+			// Start LiveKit automatically when overlay opens
+			console.log('[CallOverlay] Starting LiveKit ASR automatically');
+			dispatch('startLivekitAsr');
 
-            // Listen for transcript ready events
-            eventTarget.addEventListener('transcript:ready', transcriptReadyHandler);
-        } else {
-            await startRecording();
-        }
+			// Listen for transcript ready events
+			eventTarget.addEventListener('transcript:ready', transcriptReadyHandler);
+		} else {
+			await startRecording();
+		}
 		eventTarget.addEventListener('chat:start', chatStartHandler);
 		eventTarget.addEventListener('chat', chatEventHandler);
 		eventTarget.addEventListener('chat:finish', chatFinishHandler);
@@ -716,7 +726,7 @@
 					lkAutoSubmitTimeout = null;
 				}
 
-                dispatch('stopLivekitAsr');
+				dispatch('stopLivekitAsr');
 			}
 
 			audioAbortController.abort();
@@ -726,7 +736,7 @@
 
 			await stopRecordingCallback(false);
 			await stopCamera();
-        };
+		};
 	});
 
 	onDestroy(async () => {
@@ -745,8 +755,8 @@
 				clearTimeout(lkAutoSubmitTimeout);
 				lkAutoSubmitTimeout = null;
 			}
-
-            dispatch('stopLivekitAsr');
+			stopResponse();
+			dispatch('stopLivekitAsr');
 		}
 
 		audioAbortController.abort();
@@ -759,6 +769,36 @@
 
 {#if $showCallOverlay}
 	<div class="max-w-lg w-full h-full max-h-[100dvh] flex flex-col justify-between p-3 md:p-6">
+		<!-- Close button -->
+		<div class="text-right">
+			<button
+				class=" p-3 rounded-full"
+				on:click={async () => {
+					await stopAudioStream();
+					await stopVideoStream();
+
+					console.log(audioStream);
+					console.log(cameraStream);
+
+					showCallOverlay.set(false);
+					dispatch('close');
+				}}
+				type="button"
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					viewBox="0 0 24 24"
+					aria-hidden="true"
+					stroke-width="2"
+					stroke="currentColor"
+					fill="none"
+					class="w-5 h-5"
+				>
+					<path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"></path>
+				</svg>
+			</button>
+		</div>
+
 		{#if camera}
 			<button
 				type="button"
@@ -819,44 +859,6 @@
 							r="3"
 						/><circle class="spinner_qM83 spinner_ZTLf" cx="20" cy="12" r="3" /></svg
 					>
-                {:else if LIVEKIT_ENABLED}
-                    <div class="flex items-center justify-center w-full h-full">LIVEKIT</div>
-                    <svg
-                            class="size-12 text-gray-900 dark:text-gray-400"
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                            xmlns="http://www.w3.org/2000/svg"
-                    ><style>
-                        .spinner_qM83 {
-                            animation: spinner_8HQG 1.05s infinite;
-                        }
-                        .spinner_oXPr {
-                            animation-delay: 0.1s;
-                        }
-                        .spinner_ZTLf {
-                            animation-delay: 0.2s;
-                        }
-                        @keyframes spinner_8HQG {
-                            0%,
-                            57.14% {
-                                animation-timing-function: cubic-bezier(0.33, 0.66, 0.66, 1);
-                                transform: translate(0);
-                            }
-                            28.57% {
-                                animation-timing-function: cubic-bezier(0.33, 0, 0.66, 0.33);
-                                transform: translateY(-6px);
-                            }
-                            100% {
-                                transform: translate(0);
-                            }
-                        }
-                    </style><circle class="spinner_qM83" cx="4" cy="12" r="3" /><circle
-                            class="spinner_qM83 spinner_oXPr"
-                            cx="12"
-                            cy="12"
-                            r="3"
-                    /><circle class="spinner_qM83 spinner_ZTLf" cx="20" cy="12" r="3" /></svg
-                    >
 				{:else}
 					<div
 						class=" {rmsLevel * 100 > 4
@@ -882,6 +884,7 @@
 		<div class="flex justify-center items-center flex-1 h-full w-full max-h-full">
 			{#if !camera}
 				<button
+					class="w-full h-full flex flex-col items-center justify-center outline-none"
 					type="button"
 					on:click={() => {
 						if (assistantSpeaking) {
@@ -889,65 +892,128 @@
 						}
 					}}
 				>
-                    {#if LIVEKIT_ENABLED}
-                        <div class="">
-                            <div class="text-5xl font-bold text-gray-300 mb-20">LiveKit</div>
-                            <div>{userPrompt}</div>
-                        </div>
-                    {:else}
-                        {#if emoji}
-                            <div
-                                    class="  transition-all rounded-full"
-                                    style="font-size:{rmsLevel * 100 > 4
+					{#if LIVEKIT_ENABLED}
+						<div class="flex flex-col h-full w-full">
+							<div class="flex-[2] flex items-center justify-center">
+								{#if lkThinking}
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										viewBox="0 0 24 24"
+										width="512"
+										height="512"
+										fill="currentColor"
+										class="w-40 h-40 translate-y-[0.5px] text-gray-500 animate-breath"
+									>
+										<path
+											d="M3,22.5c0,.828-.672,1.5-1.5,1.5s-1.5-.672-1.5-1.5,.672-1.5,1.5-1.5,1.5,.672,1.5,1.5Zm3-5.5c-1.105,0-2,.895-2,2s.895,2,2,2,2-.895,2-2-.895-2-2-2Zm9.845-1.42c.699,.279,1.422,.42,2.155,.42,3.309,0,6-2.691,6-6,0-2.733-1.823-5.069-4.416-5.772-.938-2.518-3.356-4.228-6.084-4.228-1.879,0-3.652,.819-4.88,2.223-.524-.147-1.067-.223-1.62-.223C3.691,2,1,4.691,1,8c0,3.242,2.585,5.892,5.802,5.997,1.062,1.845,3.032,3.003,5.198,3.003,1.426,0,2.767-.499,3.845-1.42Z"
+										/>
+									</svg>
+								{:else if assistantSpeaking}
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										id="Layer_1"
+										data-name="Layer 1"
+										viewBox="0 0 24 24"
+										fill="currentColor"
+										class="w-40 h-40 translate-y-[0.5px] text-gray-500"
+									>
+										<path
+											d="m19,8v8c0,.553-.447,1-1,1s-1-.447-1-1v-8c0-.553.447-1,1-1s1,.447,1,1ZM14,0c-.553,0-1,.447-1,1v22c0,.553.447,1,1,1s1-.447,1-1V1c0-.553-.447-1-1-1Zm8,4c-.553,0-1,.447-1,1v14c0,.553.447,1,1,1s1-.447,1-1V5c0-.553-.447-1-1-1Zm-12,0c-.553,0-1,.447-1,1v14c0,.553.447,1,1,1s1-.447,1-1V5c0-.553-.447-1-1-1Zm-4,3c-.553,0-1,.447-1,1v8c0,.553.447,1,1,1s1-.447,1-1v-8c0-.553-.447-1-1-1Zm-4,2c-.553,0-1,.447-1,1v4c0,.553.447,1,1,1s1-.447,1-1v-4c0-.553-.447-1-1-1Z"
+										/>
+									</svg>
+								{:else if lkConnectionState == ConnectionState.Connecting}
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										viewBox="0 0 24 24"
+										fill="currentColor"
+										class="w-40 h-40 translate-y-[0.5px] text-amber-500"
+									>
+										<path
+											d="m12.707,12.707l-2.293,2.293-1.414-1.414,2.293-2.293c.391-.391.391-1.023,0-1.414s-1.023-.391-1.414,0l-2.293,2.293-1.879-1.879c-.391-.391-1.023-.391-1.414,0s-.391,1.023,0,1.414l.352.352-1.134,1.135c-1.77,1.769-1.982,4.515-.638,6.519l-2.58,2.58c-.391.391-.391,1.023,0,1.414.195.195.451.293.707.293s.512-.098.707-.293l2.58-2.58c.865.58,1.868.871,2.871.871,1.321,0,2.642-.503,3.647-1.509l1.135-1.134.352.352c.195.195.451.293.707.293s.512-.098.707-.293c.391-.391.391-1.023,0-1.414l-1.879-1.879,2.293-2.293c.391-.391.391-1.023,0-1.414s-1.023-.391-1.414,0ZM23.707.293c-.391-.391-1.023-.391-1.414,0l-2.58,2.58c-2.004-1.344-4.749-1.132-6.519.638l-1.135,1.135-.353-.353c-.391-.391-1.023-.391-1.414,0s-.391,1.023,0,1.414l8,8c.195.195.451.293.707.293s.512-.098.707-.293c.391-.391.391-1.023,0-1.414l-.353-.353,1.135-1.135c1.77-1.769,1.982-4.515.638-6.519l2.58-2.58c.391-.391.391-1.023,0-1.414Z"
+										/>
+									</svg>
+								{:else if lkConnectionState == ConnectionState.Connected}
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										viewBox="0 0 20 20"
+										fill="currentColor"
+										class="w-40 h-40 translate-y-[0.5px] text-teal-500"
+									>
+										<path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z"></path>
+										<path
+											d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z"
+										></path>
+									</svg>
+								{:else if lkConnectionState == ConnectionState.Disconnected}
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										viewBox="0 0 24 24"
+										fill="currentColor"
+										class="w-40 h-40 translate-y-[0.5px] text-gray-500"
+									>
+										<path
+											d="m12.707,12.707l-2.293,2.293-1.414-1.414,2.293-2.293c.391-.391.391-1.023,0-1.414s-1.023-.391-1.414,0l-2.293,2.293-1.879-1.879c-.391-.391-1.023-.391-1.414,0s-.391,1.023,0,1.414l.352.352-1.134,1.135c-1.77,1.769-1.982,4.515-.638,6.519l-2.58,2.58c-.391.391-.391,1.023,0,1.414.195.195.451.293.707.293s.512-.098.707-.293l2.58-2.58c.865.58,1.868.871,2.871.871,1.321,0,2.642-.503,3.647-1.509l1.135-1.134.352.352c.195.195.451.293.707.293s.512-.098.707-.293c.391-.391.391-1.023,0-1.414l-1.879-1.879,2.293-2.293c.391-.391.391-1.023,0-1.414s-1.023-.391-1.414,0ZM23.707.293c-.391-.391-1.023-.391-1.414,0l-2.58,2.58c-2.004-1.344-4.749-1.132-6.519.638l-1.135,1.135-.353-.353c-.391-.391-1.023-.391-1.414,0s-.391,1.023,0,1.414l8,8c.195.195.451.293.707.293s.512-.098.707-.293c.391-.391.391-1.023,0-1.414l-.353-.353,1.135-1.135c1.77-1.769,1.982-4.515.638-6.519l2.58-2.58c.391-.391.391-1.023,0-1.414Z"
+										/>
+									</svg>
+								{/if}
+							</div>
+							<div class="flex-[1] w-full text-left overflow-y-auto px-4">
+								{userPrompt}
+							</div>
+						</div>
+					{:else if emoji}
+						<div
+							class="  transition-all rounded-full"
+							style="font-size:{rmsLevel * 100 > 4
 								? '13'
 								: rmsLevel * 100 > 2
 									? '12'
 									: rmsLevel * 100 > 1
 										? '11.5'
 										: '11'}rem;width:100%;text-align:center;"
-                            >
-                                {emoji}
-                            </div>
-                        {:else if loading || assistantSpeaking}
-                            <svg
-                                    class="size-44 text-gray-900 dark:text-gray-400"
-                                    viewBox="0 0 24 24"
-                                    fill="currentColor"
-                                    xmlns="http://www.w3.org/2000/svg"
-                            ><style>
-                                .spinner_qM83 {
-                                    animation: spinner_8HQG 1.05s infinite;
-                                }
-                                .spinner_oXPr {
-                                    animation-delay: 0.1s;
-                                }
-                                .spinner_ZTLf {
-                                    animation-delay: 0.2s;
-                                }
-                                @keyframes spinner_8HQG {
-                                    0%,
-                                    57.14% {
-                                        animation-timing-function: cubic-bezier(0.33, 0.66, 0.66, 1);
-                                        transform: translate(0);
-                                    }
-                                    28.57% {
-                                        animation-timing-function: cubic-bezier(0.33, 0, 0.66, 0.33);
-                                        transform: translateY(-6px);
-                                    }
-                                    100% {
-                                        transform: translate(0);
-                                    }
-                                }
-                            </style><circle class="spinner_qM83" cx="4" cy="12" r="3" /><circle
-                                    class="spinner_qM83 spinner_oXPr"
-                                    cx="12"
-                                    cy="12"
-                                    r="3"
-                            /><circle class="spinner_qM83 spinner_ZTLf" cx="20" cy="12" r="3" /></svg
-                            >
-                        {:else}
-                            <div
-                                    class=" {rmsLevel * 100 > 4
+						>
+							{emoji}
+						</div>
+					{:else if loading || assistantSpeaking}
+						<svg
+							class="size-44 text-gray-900 dark:text-gray-400"
+							viewBox="0 0 24 24"
+							fill="currentColor"
+							xmlns="http://www.w3.org/2000/svg"
+							><style>
+								.spinner_qM83 {
+									animation: spinner_8HQG 1.05s infinite;
+								}
+								.spinner_oXPr {
+									animation-delay: 0.1s;
+								}
+								.spinner_ZTLf {
+									animation-delay: 0.2s;
+								}
+								@keyframes spinner_8HQG {
+									0%,
+									57.14% {
+										animation-timing-function: cubic-bezier(0.33, 0.66, 0.66, 1);
+										transform: translate(0);
+									}
+									28.57% {
+										animation-timing-function: cubic-bezier(0.33, 0, 0.66, 0.33);
+										transform: translateY(-6px);
+									}
+									100% {
+										transform: translate(0);
+									}
+								}
+							</style><circle class="spinner_qM83" cx="4" cy="12" r="3" /><circle
+								class="spinner_qM83 spinner_oXPr"
+								cx="12"
+								cy="12"
+								r="3"
+							/><circle class="spinner_qM83 spinner_ZTLf" cx="20" cy="12" r="3" /></svg
+						>
+					{:else}
+						<div
+							class=" {rmsLevel * 100 > 4
 								? ' size-52'
 								: rmsLevel * 100 > 2
 									? 'size-48'
@@ -957,13 +1023,12 @@
 								?.profile_image_url ?? '/static/favicon.png') !== '/static/favicon.png'
 								? ' bg-cover bg-center bg-no-repeat'
 								: 'bg-teal-500'} "
-                                    style={(model?.info?.meta?.profile_image_url ?? '/static/favicon.png') !==
+							style={(model?.info?.meta?.profile_image_url ?? '/static/favicon.png') !==
 							'/static/favicon.png'
 								? `background-image: url('${model?.info?.meta?.profile_image_url}');`
 								: ''}
-                            />
-                        {/if}
-                    {/if}
+						/>
+					{/if}
 				</button>
 			{:else}
 				<div class="relative flex video-container w-full max-h-full pt-2 pb-4 md:py-6 px-2 h-full">
@@ -1001,130 +1066,267 @@
 		</div>
 
 		<div class="flex justify-between items-center pb-2 w-full">
-            {#if !LIVEKIT_ENABLED}
-                <div>
-                    {#if camera}
-                        <VideoInputMenu
-                            devices={videoInputDevices}
-                            on:change={async (e) => {
-                                console.log(e.detail);
-                                selectedVideoInputDeviceId = e.detail;
-                                await stopVideoStream();
-                                await startVideoStream();
-                            }}
-                        >
-                            <button class=" p-3 rounded-full bg-gray-50 dark:bg-gray-900" type="button">
-                                <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    viewBox="0 0 20 20"
-                                    fill="currentColor"
-                                    class="size-5"
-                                >
-                                    <path
-                                        fill-rule="evenodd"
-                                        d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0V5.36l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z"
-                                        clip-rule="evenodd"
-                                    />
-                                </svg>
-                            </button>
-                        </VideoInputMenu>
-                    {:else}
-                        <Tooltip content={$i18n.t('Camera')}>
-                            <button
-                                class=" p-3 rounded-full bg-gray-50 dark:bg-gray-900"
-                                type="button"
-                                on:click={async () => {
-                                    await navigator.mediaDevices.getUserMedia({ video: true });
-                                    startCamera();
-                                }}
-                            >
-                                <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke-width="1.5"
-                                    stroke="currentColor"
-                                    class="size-5"
-                                >
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"
-                                    />
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z"
-                                    />
-                                </svg>
-                            </button>
-                        </Tooltip>
-                    {/if}
-                </div>
-            {/if}
+			{#if !LIVEKIT_ENABLED}
+				<div>
+					{#if camera}
+						<VideoInputMenu
+							devices={videoInputDevices}
+							on:change={async (e) => {
+								console.log(e.detail);
+								selectedVideoInputDeviceId = e.detail;
+								await stopVideoStream();
+								await startVideoStream();
+							}}
+						>
+							<button class=" p-3 rounded-full bg-gray-50 dark:bg-gray-900" type="button">
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 20 20"
+									fill="currentColor"
+									class="size-5"
+								>
+									<path
+										fill-rule="evenodd"
+										d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0V5.36l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z"
+										clip-rule="evenodd"
+									/>
+								</svg>
+							</button>
+						</VideoInputMenu>
+					{:else}
+						<Tooltip content={$i18n.t('Camera')}>
+							<button
+								class=" p-3 rounded-full bg-gray-50 dark:bg-gray-900"
+								type="button"
+								on:click={async () => {
+									await navigator.mediaDevices.getUserMedia({ video: true });
+									startCamera();
+								}}
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke-width="1.5"
+									stroke="currentColor"
+									class="size-5"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"
+									/>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z"
+									/>
+								</svg>
+							</button>
+						</Tooltip>
+					{/if}
+				</div>
+			{/if}
 
 			<div>
 				<button
 					type="button"
 					on:click={() => {
-                        if (assistantSpeaking) {
-                            stopAllAudio();
-                        }
+						if (assistantSpeaking || lkThinking) {
+							stopAllAudio();
+						} else if (lkConnectionState === ConnectionState.Connected) {
+							dispatch('stopLivekitAsr');
+						} else if (lkConnectionState === ConnectionState.Disconnected) {
+							dispatch('startLivekitAsr');
+						}
 					}}
 				>
-					<div class=" line-clamp-1 text-sm font-medium">
-                        {#if LIVEKIT_ENABLED}
-                            {#if lkConnecting}
-                                {$i18n.t('Connecting...')}
-                            {:else if lkConnected}
-                                {#if assistantSpeaking}
-                                    {$i18n.t('Tap to interrupt livekit')}
-                                {:else if lkThinking}
-                                    {$i18n.t('Thinking...')}
-                                {:else}
-                                    {$i18n.t('Listening...')}
-                                {/if}
-                            {/if}
-                        {:else}
-                            {#if loading}
-                                {$i18n.t('Thinking...')}
-                            {:else if assistantSpeaking}
-                                {$i18n.t('Tap to interrupt')}
-                            {:else}
-                                {$i18n.t('Listening...')}
-                            {/if}
-                        {/if}
-					</div>
-				</button>
-			</div>
-
-			<div>
-				<button
-					class=" p-3 rounded-full bg-gray-50 dark:bg-gray-900"
-					on:click={async () => {
-						await stopAudioStream();
-						await stopVideoStream();
-
-						console.log(audioStream);
-						console.log(cameraStream);
-
-						showCallOverlay.set(false);
-						dispatch('close');
-					}}
-					type="button"
-				>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						viewBox="0 0 20 20"
-						fill="currentColor"
-						class="size-5"
-					>
-						<path
-							d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"
-						/>
-					</svg>
+					{#if LIVEKIT_ENABLED && lkConnectionState === ConnectionState.Connected && !assistantSpeaking && !lkThinking}
+						<!-- Audio Level Meter (horizontal) -->
+						<div class="flex items-center justify-center gap-0.5 px-2">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 20 20"
+								fill="currentColor"
+								class="w-5 h-5 translate-y-[0.5px] text-rose-500 ml-3"
+							>
+								<path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z"></path>
+								<path
+									d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z"
+								></path>
+							</svg> 
+							{#each AUDIO_BARS as index}
+								{@const isFilled = lkMicLevel * AUDIO_BARS_COUNT >= index + 1}
+								{@const isTeal = index < AUDIO_BARS_COUNT - AUDIO_BARS_COUNT / 4}
+								{@const isStandby = lkMicLevel === 0}
+								<div
+									class="audio-bar"
+									class:filled={isFilled}
+									class:teal={isTeal}
+									class:yellow={!isTeal}
+									class:standby={isStandby}
+									style={isStandby ? `animation-delay: ${index * 100}ms` : ''}
+								/>
+							{/each}
+						</div>
+					{:else}
+						<div class="line-clamp-1 text-sm font-medium pl-3">
+							{#if LIVEKIT_ENABLED}
+								{#if lkConnectionState === ConnectionState.Disconnected}
+									<div class="flex items-center gap-2 w-full">
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											viewBox="0 0 24 24"
+											fill="currentColor"
+											class="w-5 h-5 translate-y-[0.5px] text-rose-500"
+										>
+											<path
+												d="m12.707,12.707l-2.293,2.293-1.414-1.414,2.293-2.293c.391-.391.391-1.023,0-1.414s-1.023-.391-1.414,0l-2.293,2.293-1.879-1.879c-.391-.391-1.023-.391-1.414,0s-.391,1.023,0,1.414l.352.352-1.134,1.135c-1.77,1.769-1.982,4.515-.638,6.519l-2.58,2.58c-.391.391-.391,1.023,0,1.414.195.195.451.293.707.293s.512-.098.707-.293l2.58-2.58c.865.58,1.868.871,2.871.871,1.321,0,2.642-.503,3.647-1.509l1.135-1.134.352.352c.195.195.451.293.707.293s.512-.098.707-.293c.391-.391.391-1.023,0-1.414l-1.879-1.879,2.293-2.293c.391-.391.391-1.023,0-1.414s-1.023-.391-1.414,0ZM23.707.293c-.391-.391-1.023-.391-1.414,0l-2.58,2.58c-2.004-1.344-4.749-1.132-6.519.638l-1.135,1.135-.353-.353c-.391-.391-1.023-.391-1.414,0s-.391,1.023,0,1.414l8,8c.195.195.451.293.707.293s.512-.098.707-.293c.391-.391.391-1.023,0-1.414l-.353-.353,1.135-1.135c1.77-1.769,1.982-4.515.638-6.519l2.58-2.58c.391-.391.391-1.023,0-1.414Z"
+											/>
+										</svg>
+										{$i18n.t('Disconnected')}
+									</div>
+								{:else if lkConnectionState === ConnectionState.Connecting}
+									<div class="flex items-center gap-2 w-full">
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											viewBox="0 0 24 24"
+											fill="currentColor"
+											class="w-5 h-5 translate-y-[0.5px] text-amber-500"
+										>
+											<path
+												d="m12.707,12.707l-2.293,2.293-1.414-1.414,2.293-2.293c.391-.391.391-1.023,0-1.414s-1.023-.391-1.414,0l-2.293,2.293-1.879-1.879c-.391-.391-1.023-.391-1.414,0s-.391,1.023,0,1.414l.352.352-1.134,1.135c-1.77,1.769-1.982,4.515-.638,6.519l-2.58,2.58c-.391.391-.391,1.023,0,1.414.195.195.451.293.707.293s.512-.098.707-.293l2.58-2.58c.865.58,1.868.871,2.871.871,1.321,0,2.642-.503,3.647-1.509l1.135-1.134.352.352c.195.195.451.293.707.293s.512-.098.707-.293c.391-.391.391-1.023,0-1.414l-1.879-1.879,2.293-2.293c.391-.391.391-1.023,0-1.414s-1.023-.391-1.414,0ZM23.707.293c-.391-.391-1.023-.391-1.414,0l-2.58,2.58c-2.004-1.344-4.749-1.132-6.519.638l-1.135,1.135-.353-.353c-.391-.391-1.023-.391-1.414,0s-.391,1.023,0,1.414l8,8c.195.195.451.293.707.293s.512-.098.707-.293c.391-.391.391-1.023,0-1.414l-.353-.353,1.135-1.135c1.77-1.769,1.982-4.515.638-6.519l2.58-2.58c.391-.391.391-1.023,0-1.414Z"
+											/>
+										</svg>
+										{$i18n.t('Connecting...')}
+									</div>
+								{:else if lkConnectionState === ConnectionState.Connected}
+									{#if assistantSpeaking}
+										<div class="flex items-center gap-2 w-full">
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												viewBox="0 0 24 24"
+												fill="currentColor"
+												class="w-5 h-5 text-rose-500"
+											>
+												<path
+													d="M12,0A12,12,0,1,0,24,12,12,12,0,0,0,12,0Zm4.707,15.293-1.414,1.414L12,13.414,8.707,16.707,7.293,15.293,10.586,12,7.293,8.707,8.707,7.293,12,10.586l3.293-3.293,1.414,1.414L13.414,12Z"
+												/>
+											</svg>
+											{$i18n.t('Tap to interrupt')}
+										</div>
+									{:else if lkThinking}
+										<div class="flex items-center gap-2 w-full">
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												viewBox="0 0 24 24"
+												width="512"
+												height="512"
+												fill="currentColor"
+												class="w-5 h-5 translate-y-[0.5px] text-indigo-500"
+											>
+												<path
+													d="M3,22.5c0,.828-.672,1.5-1.5,1.5s-1.5-.672-1.5-1.5,.672-1.5,1.5-1.5,1.5,.672,1.5,1.5Zm3-5.5c-1.105,0-2,.895-2,2s.895,2,2,2,2-.895,2-2-.895-2-2-2Zm9.845-1.42c.699,.279,1.422,.42,2.155,.42,3.309,0,6-2.691,6-6,0-2.733-1.823-5.069-4.416-5.772-.938-2.518-3.356-4.228-6.084-4.228-1.879,0-3.652,.819-4.88,2.223-.524-.147-1.067-.223-1.62-.223C3.691,2,1,4.691,1,8c0,3.242,2.585,5.892,5.802,5.997,1.062,1.845,3.032,3.003,5.198,3.003,1.426,0,2.767-.499,3.845-1.42Z"
+												/>
+											</svg>
+											{$i18n.t('Thinking...')}
+										</div>
+									{/if}
+								{/if}
+							{:else if loading}
+								{$i18n.t('Thinking...')}
+							{:else if assistantSpeaking}
+								{$i18n.t('Tap to interrupt')}
+							{:else}
+								{$i18n.t('Listening...')}
+							{/if}
+						</div>
+					{/if}
 				</button>
 			</div>
 		</div>
 	</div>
 {/if}
+
+<style>
+	/* Horizontal audio level meter bars */
+	.audio-bar {
+		width: 15px;
+		height: 5px;
+		border: darkorange solid 1px;
+		background-color: orange;
+		opacity: 0.2;
+		transition:
+			background-color 100ms ease-out,
+			border-color 100ms ease-out;
+	}
+
+	.audio-bar.teal {
+		border: seagreen solid 1px;
+		background-color: lightseagreen;
+		opacity: 0.2;
+	}
+
+	/* Filled state - bar is active */
+	.audio-bar.teal.filled {
+		background-color: lightseagreen;
+		border-color: lightseagreen;
+		opacity: 1;
+	}
+
+	.audio-bar.filled {
+		background-color: orange;
+		border-color: orange;
+		opacity: 1;
+	}
+
+	/* Standby animation when no audio input */
+	.audio-bar.standby {
+		animation: standby-wave 1.5s ease-in-out infinite;
+	}
+
+	@keyframes standby-wave {
+		0%,
+		100% {
+			opacity: 0.15;
+		}
+		50% {
+			opacity: 0.5;
+		}
+	}
+
+	/* Mobile responsiveness - narrower bars */
+	@media (max-width: 640px) {
+		.audio-bar {
+			width: 20px;
+			height: 5px;
+		}
+	}
+
+	/* Tablet and up - slightly wider bars */
+	@media (min-width: 768px) {
+		.audio-bar {
+			width: 15px;
+			height: 5px;
+		}
+	}
+
+	.animate-breath {
+		animation: breath 2s infinite ease-in-out;
+	}
+
+	@keyframes breath {
+		0% {
+			transform: scale(0.95);
+			opacity: 0.6;
+		}
+		50% {
+			transform: scale(1.05);
+			opacity: 1;
+		}
+		100% {
+			transform: scale(0.95);
+			opacity: 0.6;
+		}
+	}
+</style>
