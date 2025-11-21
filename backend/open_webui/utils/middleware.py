@@ -5,6 +5,7 @@ import os
 import base64
 
 import asyncio
+import websockets
 from aiocache import cached
 from typing import Any, Optional
 import random
@@ -1748,6 +1749,59 @@ async def process_chat_response(
                     response_tool_calls = []
                     function_name = None
 
+                    elevenlabs_ws = None
+                    audio_receiver_task = None
+                    current_sentence = ""
+
+                    if request.app.state.config.TTS_ENGINE == "elevenlabs":
+                        log.info(f"Audio streaming enabled. Voice: {request.app.state.config.TTS_VOICE}")
+                        voice_id = request.app.state.config.TTS_VOICE
+                        api_key = request.app.state.config.TTS_API_KEY
+                        model_id = request.app.state.config.TTS_MODEL
+
+                        if api_key and voice_id:
+                            log.info(f"Connecting to ElevenLabs with Voice ID: {voice_id}")
+                            if not event_emitter:
+                                log.error("Event emitter is None! Cannot stream audio.")
+                            else:
+                                try:
+                                    uri = f"wss://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream-input?model_id={model_id}"
+                                    elevenlabs_ws = await websockets.connect(uri)
+                                    await elevenlabs_ws.send(json.dumps({
+                                        "text": " ",
+                                        "voice_settings": {
+                                            "stability": 0.5,
+                                            "similarity_boost": 0.75
+                                        },
+                                        "xi_api_key": api_key,
+                                    }))
+
+                                    async def receive_audio():
+                                        try:
+                                            while True:
+                                                message = await elevenlabs_ws.recv()
+                                                data = json.loads(message)
+                                                if data.get("audio"):
+                                                    log.info("Received audio chunk from ElevenLabs")
+                                                    if event_emitter:
+                                                        await event_emitter({
+                                                            "type": "chat:completion",
+                                                            "data": {
+                                                                "audio": data["audio"]
+                                                            }
+                                                        })
+                                                    else:
+                                                        log.error("Event emitter is None during audio reception")
+                                                if data.get("isFinal"):
+                                                    break
+                                        except Exception as e:
+                                            log.error(f"ElevenLabs WS Error: {e}")
+
+                                    audio_receiver_task = asyncio.create_task(receive_audio())
+                                except Exception as e:
+                                    log.error(f"Failed to connect to ElevenLabs: {e}")
+                                    elevenlabs_ws = None
+
                     async for line in response.body_iterator:
                         line = line.decode("utf-8") if isinstance(line, bytes) else line
                         data = line
@@ -1887,6 +1941,20 @@ async def process_chat_response(
                                         value = ""
                                         delta["content"] = ""
 
+                                    # Sent text chunk to the elevenlabs websocket if selected
+                                    if elevenlabs_ws and value:
+                                        current_sentence += value
+                                        if " " in current_sentence:
+                                            last_space_index = current_sentence.rfind(" ")
+                                            text_to_send = current_sentence[:last_space_index + 1]
+                                            current_sentence = current_sentence[last_space_index + 1:]
+
+                                            if text_to_send:
+                                                await elevenlabs_ws.send(json.dumps({
+                                                    "text": text_to_send,
+                                                    "try_trigger_generation": True
+                                                }))
+
                                     reasoning_content = (
                                         delta.get("reasoning_content")
                                         or delta.get("reasoning")
@@ -2020,6 +2088,17 @@ async def process_chat_response(
                             else:
                                 log.debug("Error: ", e)
                                 continue
+
+                    if elevenlabs_ws:
+                        if current_sentence:
+                            await elevenlabs_ws.send(json.dumps({
+                                "text": current_sentence,
+                                "try_trigger_generation": True
+                            }))
+                        await elevenlabs_ws.send(json.dumps({"text": ""}))
+                        if audio_receiver_task:
+                            await audio_receiver_task
+                        await elevenlabs_ws.close()
 
                     if content_blocks:
                         # Clean up the last text block
@@ -2436,6 +2515,8 @@ async def process_chat_response(
                             "content": serialize_content_blocks(content_blocks),
                         },
                     )
+
+
 
             if response.background is not None:
                 await response.background()

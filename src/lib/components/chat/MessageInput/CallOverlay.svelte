@@ -63,7 +63,8 @@
 		.map((_, i) => i); // Cache array
 
 	// Reactive: Start/stop visualizer based on LiveKit connection and state
-	$: if (LIVEKIT_ENABLED) {}
+	$: if (LIVEKIT_ENABLED) {
+	}
 
 	const getVideoInputDevices = async () => {
 		const devices = await navigator.mediaDevices.enumerateDevices();
@@ -465,6 +466,14 @@
 			audioElement.pause();
 			audioElement.currentTime = 0;
 		}
+
+		if (audioContext) {
+			await audioContext.close();
+			audioContext = null;
+		}
+		nextStartTime = 0;
+		audioQueue = [];
+		isPlayingAudio = false;
 	};
 
 	let audioAbortController = new AbortController();
@@ -530,6 +539,10 @@
 
 	const monitorAndPlayAudio = async (id, signal) => {
 		while (!signal.aborted) {
+			if (isAudioStreaming) {
+				await new Promise((resolve) => setTimeout(resolve, 200));
+				continue;
+			}
 			if (messages[id] && messages[id].length > 0) {
 				// Retrieve the next content string from the queue
 				const content = messages[id].shift(); // Dequeues the content for playing
@@ -554,7 +567,6 @@
 							);
 							assistantSpeaking = true;
 							lkThinking = false;
-							console.log('-----> START SPEAKING <-----');
 
 							const audio = audioCache.get(content);
 							await playAudio(audio); // Here ensure that playAudio is indeed correct method to execute
@@ -588,6 +600,7 @@
 		const { id } = e.detail;
 
 		chatStreaming = true;
+		isAudioStreaming = false;
 
 		if (currentMessageId !== id) {
 			console.log(`Received chat start event for message ID ${id}`);
@@ -605,6 +618,7 @@
 	};
 
 	const chatEventHandler = async (e) => {
+		if (isAudioStreaming || $config?.audio?.tts?.engine === 'elevenlabs') return;
 		const { id, content } = e.detail;
 		// "id" here is message id
 		// if "id" is not the same as "currentMessageId" then do not process
@@ -622,7 +636,6 @@
 				console.log(content);
 
 				fetchAudio(content);
-				console.log('-----> FETCHING AUDIO: ', content, ' <-----');
 			} catch (error) {
 				console.error('Failed to fetch or play audio:', error);
 			}
@@ -638,10 +651,10 @@
 	};
 
 	const transcriptReadyHandler = async (e) => {
-        // Ignore transcript if prompt already sent, but no answer from chat received.
+		// Ignore transcript if prompt already sent, but no answer from chat received.
 		if (lkThinking) return;
 
-        userPrompt = e.detail.text;
+		userPrompt = e.detail.text;
 
 		console.log('[CallOverlay] 🎤 TRANSCRIPT READY:', userPrompt);
 
@@ -666,7 +679,71 @@
 		}, LIVEKIT_AUTO_SUBMIT_DELAY);
 	};
 
+	let audioQueue = [];
+	let isPlayingAudio = false;
+	let isAudioStreaming = false;
+	let audioContext = null;
+	let nextStartTime = 0;
+
+	const initAudioContext = () => {
+		if (!audioContext) {
+			audioContext = new (window.AudioContext || window.webkitAudioContext)();
+		}
+		if (audioContext.state === 'suspended') {
+			audioContext.resume();
+		}
+	};
+
+	const base64ToBlob = (base64, type) => {
+		const byteCharacters = atob(base64);
+		const byteNumbers = new Array(byteCharacters.length);
+		for (let i = 0; i < byteCharacters.length; i++) {
+			byteNumbers[i] = byteCharacters.charCodeAt(i);
+		}
+		const byteArray = new Uint8Array(byteNumbers);
+		return new Blob([byteArray], { type: type });
+	};
+
+	const handleAudioChunk = async (e) => {
+		isAudioStreaming = true;
+		const { audio } = e.detail;
+		
+		initAudioContext();
+
+		try {
+			const arrayBuffer = Uint8Array.from(atob(audio), c => c.charCodeAt(0)).buffer;
+			const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+			
+			const source = audioContext.createBufferSource();
+			source.buffer = audioBuffer;
+			source.connect(audioContext.destination);
+
+			const currentTime = audioContext.currentTime;
+			if (nextStartTime < currentTime) {
+				nextStartTime = currentTime;
+			}
+
+			source.start(nextStartTime);
+			nextStartTime += audioBuffer.duration;
+
+			if (!assistantSpeaking) {
+				assistantSpeaking = true;
+				lkThinking = false;
+			}
+			
+			source.onended = () => {
+				if (audioContext.currentTime >= nextStartTime) {
+					assistantSpeaking = false;
+				}
+			};
+
+		} catch (err) {
+			console.error("Error decoding audio chunk:", err);
+		}
+	};
+
 	onMount(async () => {
+		eventTarget.addEventListener('chat:audio', handleAudioChunk);
 		const setWakeLock = async () => {
 			try {
 				wakeLock = await navigator.wakeLock.request('screen');
@@ -740,6 +817,7 @@
 	});
 
 	onDestroy(async () => {
+		eventTarget.removeEventListener('chat:audio', handleAudioChunk);
 		await stopAllAudio();
 		await stopRecordingCallback(false);
 		await stopCamera();
