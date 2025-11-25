@@ -55,6 +55,10 @@
 	let lkThinking = false;
 	// let lkAudioLevel = 0;
 
+	// Sound wave animation for assistant speaking
+	let waveHeights = Array(7).fill(25);
+	let waveAnimationInterval = null;
+
 	const LIVEKIT_ENABLED = $config.audio.stt.engine === 'livekit';
 	const LIVEKIT_AUTO_SUBMIT_DELAY = 500;
 	const AUDIO_BARS_COUNT = 12;
@@ -62,8 +66,26 @@
 		.fill(0)
 		.map((_, i) => i); // Cache array
 
+	// Reactive: Animate wave heights when assistant is speaking
+	$: if (assistantSpeaking) {
+		// Start animation
+		if (!waveAnimationInterval) {
+			waveAnimationInterval = setInterval(() => {
+				waveHeights = waveHeights.map(() => Math.random() * 35 + 10); // Random height between 10-45px, avg ~27.5px
+			}, 100); // Update every 100ms for smooth animation
+		}
+	} else {
+		// Stop animation and reset to default heights
+		if (waveAnimationInterval) {
+			clearInterval(waveAnimationInterval);
+			waveAnimationInterval = null;
+		}
+		waveHeights = Array(7).fill(25);
+	}
+
 	// Reactive: Start/stop visualizer based on LiveKit connection and state
-	$: if (LIVEKIT_ENABLED) {}
+	$: if (LIVEKIT_ENABLED) {
+	}
 
 	const getVideoInputDevices = async () => {
 		const devices = await navigator.mediaDevices.enumerateDevices();
@@ -554,7 +576,6 @@
 							);
 							assistantSpeaking = true;
 							lkThinking = false;
-							console.log('-----> START SPEAKING <-----');
 
 							const audio = audioCache.get(content);
 							await playAudio(audio); // Here ensure that playAudio is indeed correct method to execute
@@ -622,7 +643,6 @@
 				console.log(content);
 
 				fetchAudio(content);
-				console.log('-----> FETCHING AUDIO: ', content, ' <-----');
 			} catch (error) {
 				console.error('Failed to fetch or play audio:', error);
 			}
@@ -740,6 +760,12 @@
 	});
 
 	onDestroy(async () => {
+		// Clean up wave animation interval
+		if (waveAnimationInterval) {
+			clearInterval(waveAnimationInterval);
+			waveAnimationInterval = null;
+		}
+
 		await stopAllAudio();
 		await stopRecordingCallback(false);
 		await stopCamera();
@@ -896,30 +922,48 @@
 						<div class="flex flex-col h-full w-full">
 							<div class="flex-[2] flex items-center justify-center">
 								{#if lkThinking}
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										viewBox="0 0 24 24"
-										width="512"
-										height="512"
-										fill="currentColor"
-										class="w-40 h-40 translate-y-[0.5px] text-gray-500 animate-breath"
-									>
-										<path
-											d="M3,22.5c0,.828-.672,1.5-1.5,1.5s-1.5-.672-1.5-1.5,.672-1.5,1.5-1.5,1.5,.672,1.5,1.5Zm3-5.5c-1.105,0-2,.895-2,2s.895,2,2,2,2-.895,2-2-.895-2-2-2Zm9.845-1.42c.699,.279,1.422,.42,2.155,.42,3.309,0,6-2.691,6-6,0-2.733-1.823-5.069-4.416-5.772-.938-2.518-3.356-4.228-6.084-4.228-1.879,0-3.652,.819-4.88,2.223-.524-.147-1.067-.223-1.62-.223C3.691,2,1,4.691,1,8c0,3.242,2.585,5.892,5.802,5.997,1.062,1.845,3.032,3.003,5.198,3.003,1.426,0,2.767-.499,3.845-1.42Z"
-										/>
-									</svg>
+                                    <svg width="100%"
+                                         height="100%"
+                                         viewBox="0 0 284 284"
+                                         xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+                                         xml:space="preserve" xmlns:serif="http://www.serif.com/"
+                                         fill="currentColor"
+                                         class="w-40 h-40 translate-y-[0.5px] text-gray-500 animate-breath"
+                                    >
+                                        <g transform="matrix(0.554687,0,0,0.554687,141.802774,142.01163)">
+                                            <g transform="matrix(1,0,0,1,-256,-256)">
+                                                <g transform="matrix(21.333333,0,0,21.333333,0,0)">
+                                                    <path d="M3,22.5C3,23.328 2.328,24 1.5,24C0.672,24 0,23.328 0,22.5C0,21.672 0.672,21 1.5,21C2.328,21 3,21.672 3,22.5ZM6,17C4.895,17 4,17.895 4,19C4,20.105 4.895,21 6,21C7.105,21 8,20.105 8,19C8,17.895 7.105,17 6,17ZM15.845,15.58C16.544,15.859 17.267,16 18,16C21.309,16 24,13.309 24,10C24,7.267 22.177,4.931 19.584,4.228C18.646,1.71 16.228,0 13.5,0C11.621,0 9.848,0.819 8.62,2.223C8.096,2.076 7.553,2 7,2C3.691,2 1,4.691 1,8C1,11.242 3.585,13.892 6.802,13.997C7.864,15.842 9.834,17 12,17C13.426,17 14.767,16.501 15.845,15.58Z" style="fill-rule:nonzero;"/>
+                                                </g>
+                                            </g>
+                                        </g>
+                                        <path d="M177.833,161.489C177.833,161.489 157.563,159.53 140.518,159.53L106.89,159.53L106.89,153.425C108.342,153.318 110.486,153.166 113.311,152.958C116.136,152.75 118.088,152.434 119.169,152.018C121.161,151.236 122.522,150.206 123.248,148.923C123.974,147.64 124.34,146.014 124.34,144.027L124.34,80.383C124.34,78.61 123.991,77.04 123.288,75.684C122.584,74.328 121.217,73.231 119.169,72.398C117.874,71.875 115.967,71.34 113.434,70.794C110.902,70.248 108.724,69.866 106.896,69.657L106.896,63.552C106.896,63.552 122.809,62.832 126.062,63.552C130.097,64.447 132.888,66.011 134.345,73.332C134.525,73.22 132.201,77.986 131.183,80.771C134.216,76.033 136.692,71.014 150.316,66.827C156.612,64.891 171.046,63.558 171.046,63.558L171.046,67.71C169.414,67.868 160.94,69.854 158.886,70.969C156.939,72.027 155.206,73.281 154.497,74.716C153.788,76.151 153.439,77.783 153.439,79.612C153.439,79.612 153.501,105.981 153.439,108.064C153.298,112.644 154.806,111.952 154.806,111.952L155.183,115.086C155.183,115.086 153.214,115.311 153.439,126.763C153.472,128.479 153.439,143.178 153.439,143.178C153.439,145.057 153.776,146.678 154.542,147.995C159.499,156.531 163.956,151.827 178.778,158.416L177.838,161.5L177.833,161.489Z" style="fill:white;"/>
+                                        <g transform="matrix(0.562726,0,0,0.562726,75.940028,25.601669)">
+                                            <path d="M131.54,27.19C131.54,27.19 122.47,14.37 108.53,22.21C90,32.64 101.25,60.57 105.87,79.95C124.05,66.84 150.06,68.31 161.56,47.46C172.23,28.12 148.38,13.33 131.54,27.19Z" style="fill:white;fill-rule:nonzero;"/>
+                                        </g>
+                                        <g transform="matrix(0.562726,0,0,0.562726,75.940028,25.601669)">
+                                            <path d="M142.07,156.4C155.82,147.12 152.6,133.99 165.29,122.97C179.38,110.73 191.13,108.31 226.57,111.02C206.92,119.57 209.54,127.58 194.06,141.42C175.37,158.14 158.61,158.57 142.86,156.59C154.26,151.83 175.34,113.18 223.51,111.65C170.12,111.64 154.7,152.28 142.61,156.54C142.24,156.46 142.05,156.4 142.05,156.4L142.07,156.4Z" style="fill:white;fill-rule:nonzero;"/>
+                                        </g>
+                                        <g transform="matrix(0.562726,0,0,0.562726,75.940028,25.601669)">
+                                            <path d="M171.1,71.37C179.25,65.94 176.68,55.42 186.78,47.77C198.57,38.84 219.67,41.08 237.7,41.27C225.02,44.9 218.09,49.11 206.79,60.97C192.67,75.8 178.95,74.01 171.42,71.64C182.64,69.66 189.34,41.06 235.5,41.44C185.5,39.51 182.04,70.21 171.27,71.45C171.15,71.46 171.1,71.37 171.1,71.37Z" style="fill:white;fill-rule:nonzero;"/>
+                                        </g>
+                                        </svg>
 								{:else if assistantSpeaking}
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
-										id="Layer_1"
-										data-name="Layer 1"
-										viewBox="0 0 24 24"
-										fill="currentColor"
-										class="w-40 h-40 translate-y-[0.5px] text-gray-500"
+										viewBox="0 0 65 50"
+										class="w-40 h-40"
 									>
-										<path
-											d="m19,8v8c0,.553-.447,1-1,1s-1-.447-1-1v-8c0-.553.447-1,1-1s1,.447,1,1ZM14,0c-.553,0-1,.447-1,1v22c0,.553.447,1,1,1s1-.447,1-1V1c0-.553-.447-1-1-1Zm8,4c-.553,0-1,.447-1,1v14c0,.553.447,1,1,1s1-.447,1-1V5c0-.553-.447-1-1-1Zm-12,0c-.553,0-1,.447-1,1v14c0,.553.447,1,1,1s1-.447,1-1V5c0-.553-.447-1-1-1Zm-4,3c-.553,0-1,.447-1,1v8c0,.553.447,1,1,1s1-.447,1-1v-8c0-.553-.447-1-1-1Zm-4,2c-.553,0-1,.447-1,1v4c0,.553.447,1,1,1s1-.447,1-1v-4c0-.553-.447-1-1-1Z"
-										/>
+										{#each waveHeights as height, i}
+											<rect
+												x={i * 8 + 10}
+												y={25 - height / 2}
+												width="3"
+												height={height}
+												fill="currentColor"
+												class="text-gray-500 transition-all duration-100"
+											/>
+										{/each}
 									</svg>
 								{:else if lkConnectionState == ConnectionState.Connecting}
 									<svg
