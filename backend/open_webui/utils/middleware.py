@@ -99,6 +99,10 @@ from open_webui.env import (
 from open_webui.constants import TASKS
 
 
+
+from open_webui.utils.livekit_helper import LiveKitWebRTCHelper
+from livekit import api as livekit_api
+
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
@@ -1371,6 +1375,44 @@ async def process_chat_response(
 
         # Handle as a background task
         async def post_response_handler(response, events):
+            lk_helper = None
+            try:
+                LIVEKIT_URL = os.getenv('LIVEKIT_URL')
+                LIVEKIT_API_KEY = os.getenv('LIVEKIT_API_KEY')
+                LIVEKIT_API_SECRET = os.getenv('LIVEKIT_API_SECRET')
+
+                if LIVEKIT_URL and LIVEKIT_API_KEY and LIVEKIT_API_SECRET:
+                    try:
+                        identity = f"backend-{uuid4().hex[:8]}"
+
+                        # CRITICAL: Use session_id to ensure all participants join the SAME room
+                        # Frontend, backend, and voice-agent must all use the same room name
+                        session_id = metadata.get("session_id")
+                        if session_id:
+                            room_name = f"if-{session_id}"
+                            log.info(f"LiveKit: Joining room {room_name} for session {session_id}")
+                        else:
+                            # Fallback to chat_id if session_id not available
+                            chat_id = metadata.get("chat_id", uuid4().hex[:8])
+                            room_name = f"if-{chat_id}"
+                            log.warning(f"LiveKit: No session_id, using chat_id for room: {room_name}")
+
+                        token = livekit_api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET) \
+                            .with_identity(identity) \
+                            .with_name("Open WebUI Backend") \
+                            .with_grants(livekit_api.VideoGrants(
+                                room_join=True,
+                                room=room_name,
+                            )).to_jwt()
+
+                        lk_helper = LiveKitWebRTCHelper(LIVEKIT_URL, token, event_emitter)
+                        await lk_helper.connect()
+                        log.info(f"LiveKit: Connected successfully to room {room_name}")
+                    except Exception as e:
+                        log.error(f"Failed to initialize LiveKit helper: {e}", exc_info=True)
+            except Exception as e:
+                log.error(f"Error setting up LiveKit: {e}", exc_info=True)
+
             def serialize_content_blocks(content_blocks, raw=False):
                 content = ""
 
@@ -1920,6 +1962,12 @@ async def process_chat_response(
                                         }
 
                                     if value:
+                                        if lk_helper:
+                                            log.debug(f"LiveKit: Sending text chunk: {value[:50]}...")
+                                            asyncio.create_task(lk_helper.send_text(value))
+                                        else:
+                                            log.debug(f"LiveKit: lk_helper not initialized, skipping text send")
+
                                         if (
                                             content_blocks
                                             and content_blocks[-1]["type"]
@@ -2439,6 +2487,9 @@ async def process_chat_response(
 
             if response.background is not None:
                 await response.background()
+            
+            if lk_helper:
+                await lk_helper.disconnect()
 
         # background_tasks.add_task(post_response_handler, response, events)
         task_id, _ = await create_task(

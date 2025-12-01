@@ -686,6 +686,54 @@
 		}, LIVEKIT_AUTO_SUBMIT_DELAY);
 	};
 
+    let audioContext = null;
+    let nextStartTime = 0;
+
+    const chatAudioHandler = async (e) => {
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        const { audio, sample_rate, num_channels } = e.detail;
+        
+        const binaryString = window.atob(audio);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        const int16Data = new Int16Array(bytes.buffer);
+        
+        const buffer = audioContext.createBuffer(num_channels, int16Data.length / num_channels, sample_rate);
+        
+        for (let channel = 0; channel < num_channels; channel++) {
+            const nowBuffering = buffer.getChannelData(channel);
+            for (let i = 0; i < int16Data.length / num_channels; i++) {
+                nowBuffering[i] = int16Data[i * num_channels + channel] / 32768.0;
+            }
+        }
+        
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioContext.destination);
+        
+        if (nextStartTime < audioContext.currentTime) {
+            nextStartTime = audioContext.currentTime;
+        }
+        
+        source.start(nextStartTime);
+        nextStartTime += buffer.duration;
+        
+        assistantSpeaking = true;
+        
+        source.onended = () => {
+             // We might want to set assistantSpeaking = false only after ALL chunks are played.
+             // But since we don't know when the stream ends easily here, we might rely on chat:finish?
+             // Or just let it be.
+             // For visualization, we might want to keep it true.
+        };
+    };
+
 	onMount(async () => {
 		const setWakeLock = async () => {
 			try {
@@ -724,29 +772,33 @@
 
 			// Listen for transcript ready events
 			eventTarget.addEventListener('transcript:ready', transcriptReadyHandler);
+			// Use LiveKit audio handler instead of default audio processing
+			eventTarget.addEventListener('chat:audio', chatAudioHandler);
 		} else {
 			await startRecording();
+			// Use default audio processing when LiveKit is disabled
+			eventTarget.addEventListener('chat:start', chatStartHandler);
+			eventTarget.addEventListener('chat', chatEventHandler);
+			eventTarget.addEventListener('chat:finish', chatFinishHandler);
 		}
-		eventTarget.addEventListener('chat:start', chatStartHandler);
-		eventTarget.addEventListener('chat', chatEventHandler);
-		eventTarget.addEventListener('chat:finish', chatFinishHandler);
 
 		return async () => {
 			await stopAllAudio();
 			await stopAudioStream();
 
-			eventTarget.removeEventListener('chat:start', chatStartHandler);
-			eventTarget.removeEventListener('chat', chatEventHandler);
-			eventTarget.removeEventListener('chat:finish', chatFinishHandler);
-
 			if (LIVEKIT_ENABLED) {
 				eventTarget.removeEventListener('transcript:ready', transcriptReadyHandler);
+				eventTarget.removeEventListener('chat:audio', chatAudioHandler);
 				if (lkAutoSubmitTimeout) {
 					clearTimeout(lkAutoSubmitTimeout);
 					lkAutoSubmitTimeout = null;
 				}
 
 				dispatch('stopLivekitAsr');
+			} else {
+				eventTarget.removeEventListener('chat:start', chatStartHandler);
+				eventTarget.removeEventListener('chat', chatEventHandler);
+				eventTarget.removeEventListener('chat:finish', chatFinishHandler);
 			}
 
 			audioAbortController.abort();
@@ -771,18 +823,20 @@
 		await stopCamera();
 
 		await stopAudioStream();
-		eventTarget.removeEventListener('chat:start', chatStartHandler);
-		eventTarget.removeEventListener('chat', chatEventHandler);
-		eventTarget.removeEventListener('chat:finish', chatFinishHandler);
 
 		if (LIVEKIT_ENABLED) {
 			eventTarget.removeEventListener('transcript:ready', transcriptReadyHandler);
+			eventTarget.removeEventListener('chat:audio', chatAudioHandler);
 			if (lkAutoSubmitTimeout) {
 				clearTimeout(lkAutoSubmitTimeout);
 				lkAutoSubmitTimeout = null;
 			}
 			stopResponse();
 			dispatch('stopLivekitAsr');
+		} else {
+			eventTarget.removeEventListener('chat:start', chatStartHandler);
+			eventTarget.removeEventListener('chat', chatEventHandler);
+			eventTarget.removeEventListener('chat:finish', chatFinishHandler);
 		}
 
 		audioAbortController.abort();

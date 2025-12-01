@@ -240,6 +240,12 @@
                     }
                 } else if (type === 'chat:completion') {
                     chatCompletionEventHandler(data, message, event.chat_id);
+                } else if (type === 'chat:audio') {
+                    eventTarget.dispatchEvent(
+                        new CustomEvent('chat:audio', {
+                            detail: data
+                        })
+                    );
                 } else if (type === 'chat:message:delta' || type === 'message') {
                     message.content += data.content;
                 } else if (type === 'chat:message' || type === 'replace') {

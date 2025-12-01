@@ -193,4 +193,5 @@ ignore-words-list = 'ans'
 members = [
     "livekit/livekit-voice-agent",
     "livekit/stt-agent",
+    "backend/livekit/tts-agent",
 ]
