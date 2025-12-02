@@ -226,12 +226,20 @@
 
         if (event.chat_id === $chatId) {
             await tick();
+            const type = event?.data?.type ?? null;
+            const data = event?.data?.data ?? null;
+
+            if (type === 'chat:audio') {
+                eventTarget.dispatchEvent(
+                    new CustomEvent('chat:audio', {
+                        detail: data
+                    })
+                );
+            }
+
             let message = history.messages[event.message_id];
 
             if (message) {
-                const type = event?.data?.type ?? null;
-                const data = event?.data?.data ?? null;
-
                 if (type === 'status') {
                     if (message?.statusHistory) {
                         message.statusHistory.push(data);
@@ -240,12 +248,6 @@
                     }
                 } else if (type === 'chat:completion') {
                     chatCompletionEventHandler(data, message, event.chat_id);
-                } else if (type === 'chat:audio') {
-                    eventTarget.dispatchEvent(
-                        new CustomEvent('chat:audio', {
-                            detail: data
-                        })
-                    );
                 } else if (type === 'chat:message:delta' || type === 'message') {
                     message.content += data.content;
                 } else if (type === 'chat:message' || type === 'replace') {

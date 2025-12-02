@@ -690,48 +690,60 @@
     let nextStartTime = 0;
 
     const chatAudioHandler = async (e) => {
-        if (!audioContext) {
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        }
-
-        const { audio, sample_rate, num_channels } = e.detail;
-        
-        const binaryString = window.atob(audio);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-        }
-        const int16Data = new Int16Array(bytes.buffer);
-        
-        const buffer = audioContext.createBuffer(num_channels, int16Data.length / num_channels, sample_rate);
-        
-        for (let channel = 0; channel < num_channels; channel++) {
-            const nowBuffering = buffer.getChannelData(channel);
-            for (let i = 0; i < int16Data.length / num_channels; i++) {
-                nowBuffering[i] = int16Data[i * num_channels + channel] / 32768.0;
+        try {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
             }
+
+            // Resume AudioContext if it's suspended
+            if (audioContext.state === 'suspended') {
+                await audioContext.resume();
+            }
+
+            const { audio, sample_rate, num_channels } = e.detail;
+
+            const binaryString = window.atob(audio);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            const int16Data = new Int16Array(bytes.buffer);
+
+            const buffer = audioContext.createBuffer(num_channels, int16Data.length / num_channels, sample_rate);
+
+            for (let channel = 0; channel < num_channels; channel++) {
+                const nowBuffering = buffer.getChannelData(channel);
+                for (let i = 0; i < int16Data.length / num_channels; i++) {
+                    nowBuffering[i] = int16Data[i * num_channels + channel] / 32768.0;
+                }
+            }
+
+            const source = audioContext.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioContext.destination);
+
+            // Schedule audio
+            if (nextStartTime < audioContext.currentTime) {
+                nextStartTime = audioContext.currentTime;
+            }
+
+            source.start(nextStartTime);
+            nextStartTime += buffer.duration;
+
+            if (!assistantSpeaking) {
+                assistantSpeaking = true;
+                lkThinking = false;
+            }
+
+            source.onended = () => {
+                if (audioContext.currentTime >= nextStartTime) {
+                    assistantSpeaking = false;
+                }
+            };
+        } catch (error) {
+            console.error('[CallOverlay] Error in chatAudioHandler:', error);
         }
-        
-        const source = audioContext.createBufferSource();
-        source.buffer = buffer;
-        source.connect(audioContext.destination);
-        
-        if (nextStartTime < audioContext.currentTime) {
-            nextStartTime = audioContext.currentTime;
-        }
-        
-        source.start(nextStartTime);
-        nextStartTime += buffer.duration;
-        
-        assistantSpeaking = true;
-        
-        source.onended = () => {
-             // We might want to set assistantSpeaking = false only after ALL chunks are played.
-             // But since we don't know when the stream ends easily here, we might rely on chat:finish?
-             // Or just let it be.
-             // For visualization, we might want to keep it true.
-        };
     };
 
 	onMount(async () => {

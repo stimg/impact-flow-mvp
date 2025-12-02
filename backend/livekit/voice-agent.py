@@ -16,7 +16,7 @@ load_dotenv()
 async def entrypoint(ctx: agents.JobContext):
     await ctx.connect(auto_subscribe=agents.AutoSubscribe.AUDIO_ONLY)
 
-    print("[Agent] connected to room:", ctx.room.name)
+    print("[Voice Agent] connected to room:", ctx.room.name)
 
     #############################################
     #   STT agent                               #
@@ -104,12 +104,18 @@ async def entrypoint(ctx: agents.JobContext):
     )
 
     # Create audio source and publish TTS track
+    # Use the TTS native sample rate - let LiveKit handle conversion
     tts_audio_source = rtc.AudioSource(tts.sample_rate, tts.num_channels)
     tts_track = rtc.LocalAudioTrack.create_audio_track("tts_audio", tts_audio_source)
-    tts_options = rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_MICROPHONE)
+
+    # Use SOURCE_UNKNOWN to prevent LiveKit from applying audio processing
+    # that might attenuate the signal (AGC, noise suppression, etc.)
+    tts_options = rtc.TrackPublishOptions(
+        source=rtc.TrackSource.SOURCE_UNKNOWN,
+    )
 
     await ctx.room.local_participant.publish_track(tts_track, tts_options)
-    print(f"[TTS Agent] TTS audio track published")
+    print(f"[TTS Agent] TTS audio track published at {tts.sample_rate}Hz with SOURCE_UNKNOWN")
 
     play_queue: asyncio.Queue[str] = asyncio.Queue()
 
@@ -149,10 +155,10 @@ async def entrypoint(ctx: agents.JobContext):
                         # Send frame to LiveKit immediately (minimal latency)
                         await audio_source.capture_frame(audio_frame)
 
-            print(f"[Agent] TTS chunk processed and streamed: {text[:50]}...")
+            print(f"[TTS Agent] Audio chunk processed and streamed: {text[:50]}...")
 
         except Exception as e:
-            print(f"[Agent] Error processing TTS chunk: {e}")
+            print(f"[TTS Agent] Error processing TTS chunk: {e}")
 
     async def synthesize_and_stream(text: str, audio_source):
         try:
@@ -163,26 +169,79 @@ async def entrypoint(ctx: agents.JobContext):
         except Exception as e:
             print(f"[TTS Agent] Error during synthesis: {e}")
 
+    chunk_counter = 0
+
     async def speak_text(text: str) -> None:
         """
-        Stream TTS audio into the LiveKit AudioSource using ElevenLabs plugin.
+        Send TTS audio via data channel in 0.5-second chunks for smooth playback.
         """
+        nonlocal chunk_counter
         stream = tts.stream()
+        import base64, json
 
         async def _pull_and_play():
+            nonlocal chunk_counter
+            buffer_chunks = []
+            buffer_size = 0
+            chunk_size = 11025  # 0.5 seconds at 22050Hz
+            sample_rate = None
+            num_channels = None
+
+            stream.push_text(text)
+            stream.end_input()
+
             async for audio_chunk in stream:
                 if not isinstance(audio_chunk, SynthesizedAudio):
                     continue
-                await tts_audio_source.capture_frame(audio_chunk.frame)
 
-        pull_task = asyncio.create_task(_pull_and_play())
+                frame = audio_chunk.frame
+                sample_rate = frame.sample_rate
+                num_channels = frame.num_channels
 
-        try:
-            stream.push_text(text)
-            stream.end_input()
-            await pull_task
-        finally:
+                frame_data = bytes(frame.data)
+                samples = np.frombuffer(frame_data, dtype=np.int16)
+                buffer_chunks.append(samples)
+                buffer_size += len(samples)
+
+                # Send when we have 0.5 seconds of audio
+                if buffer_size >= chunk_size:
+                    combined = np.concatenate(buffer_chunks)
+                    max_amp = np.max(np.abs(combined)) if len(combined) > 0 else 0
+                    print(f"[TTS-Agent] Sending chunk #{chunk_counter}: {len(combined)} samples, amplitude: {max_amp}")
+
+                    payload = json.dumps({
+                        "audio": base64.b64encode(combined.tobytes()).decode('utf-8'),
+                        "sample_rate": sample_rate,
+                        "num_channels": num_channels,
+                        "chunk_id": chunk_counter
+                    }).encode('utf-8')
+
+                    await ctx.room.local_participant.publish_data(payload, reliable=True, topic="tts_audio")
+
+                    chunk_counter += 1
+                    buffer_chunks = []
+                    buffer_size = 0
+
+            # Send remaining
+            if buffer_chunks:
+                combined = np.concatenate(buffer_chunks)
+                max_amp = np.max(np.abs(combined)) if len(combined) > 0 else 0
+                print(f"[TTS-Agent] Sending final chunk #{chunk_counter}: {len(combined)} samples, amplitude: {max_amp}")
+
+                payload = json.dumps({
+                    "audio": base64.b64encode(combined.tobytes()).decode('utf-8'),
+                    "sample_rate": sample_rate,
+                    "num_channels": num_channels,
+                    "chunk_id": chunk_counter,
+                    "final": True
+                }).encode('utf-8')
+
+                await ctx.room.local_participant.publish_data(payload, reliable=True, topic="tts_audio")
+                chunk_counter += 1
+
             await stream.aclose()
+
+        await _pull_and_play()
 
     async def playback_loop() -> None:
         print("[TTS-Agent] playback loop started; waiting for text…")

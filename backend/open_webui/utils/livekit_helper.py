@@ -17,13 +17,16 @@ class LiveKitWebRTCHelper:
         try:
             log.info(f"Connecting to LiveKit room at {self.url}")
 
+            # Set up data channel handler for TTS audio
+            @self.room.on("data_received")
+            def on_data_received(data_packet: rtc.DataPacket):
+                if data_packet.topic == "tts_audio":
+                    asyncio.create_task(self.handle_tts_audio_data(data_packet.data))
+
             # Set up track subscription handler BEFORE connecting
             @self.room.on("track_subscribed")
             def on_track_subscribed(track: rtc.Track, publication: rtc.TrackPublication, participant: rtc.RemoteParticipant):
                 log.info(f"Track subscribed: {track.kind} from {participant.identity}")
-                if track.kind == rtc.TrackKind.KIND_AUDIO:
-                    log.info(f"Starting audio stream handler for track {track.sid}")
-                    asyncio.create_task(self.handle_audio_stream(track))
 
             await self.room.connect(self.url, self.token)
             self.connected = True
@@ -32,24 +35,48 @@ class LiveKitWebRTCHelper:
         except Exception as e:
             log.error(f"Failed to connect to LiveKit: {e}")
 
+    async def handle_tts_audio_data(self, data: bytes):
+        """Handle TTS audio received via data channel"""
+        try:
+            import json
+
+            # Parse the JSON payload
+            payload = json.loads(data.decode('utf-8'))
+            audio_base64 = payload['audio']
+            sample_rate = payload['sample_rate']
+            num_channels = payload['num_channels']
+            chunk_id = payload.get('chunk_id', 0)
+
+            log.info(f"[LiveKit-Data] TTS audio chunk #{chunk_id}: {sample_rate}Hz, {num_channels}ch")
+
+            # Send to frontend via socket.io
+            await self.event_emitter({
+                "type": "chat:audio",
+                "data": {
+                    "audio": audio_base64,
+                    "sample_rate": sample_rate,
+                    "num_channels": num_channels,
+                    "chunk_id": chunk_id,
+                    "final": payload.get('final', False)
+                }
+            })
+        except Exception as e:
+            log.error(f"Error handling TTS audio data: {e}")
+
     async def handle_audio_stream(self, track):
         log.info("Starting audio stream handler")
         try:
-            # Use from_track() method - this is the correct API
+            # Use from_track() with the same sample rate as the TTS (22050Hz for ElevenLabs)
             audio_stream = rtc.AudioStream.from_track(
                 track=track,
-                sample_rate=22050,  # Match the TTS output from voice-agent (ElevenLabs turbo_v2_5)
+                sample_rate=22050,  # Match ElevenLabs TTS output
                 num_channels=1
             )
 
             async for audio_event in audio_stream:
                 frame = audio_event.frame
-
-                # frame.data is memoryview of int16 samples
                 data = bytes(frame.data)
                 encoded_data = base64.b64encode(data).decode('utf-8')
-
-                log.debug(f"Sending audio chunk: {len(data)} bytes, {frame.sample_rate}Hz, {frame.num_channels}ch")
 
                 await self.event_emitter({
                     "type": "chat:audio",
