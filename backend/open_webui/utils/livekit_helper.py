@@ -77,6 +77,7 @@ class LiveKitWebRTCHelper:
         )
 
         total_duration = 0.0
+        speech_started = False
 
         try:
             async for audio_event in audio_stream:
@@ -88,6 +89,7 @@ class LiveKitWebRTCHelper:
                 total_duration += duration_ms
 
                 # audio_array = np.frombuffer(pcm_bytes, dtype=np.int16)
+                avg_abs = np.abs(audio_array).mean()
                 log.info(
                     "Audio frame stats: samples=%d, duration=%.2fms, total=%.2fs, min=%d, max=%d, avg_abs=%.2f",
                     len(audio_array),
@@ -95,8 +97,17 @@ class LiveKitWebRTCHelper:
                     total_duration / 1000.0,
                     audio_array.min(),
                     audio_array.max(),
-                    np.abs(audio_array).mean(),
+                    avg_abs,
                 )
+
+                # Filter out initial silence only
+                if not speech_started:
+                    if avg_abs < 100:
+                        log.debug("Skipping initial silent frame (avg_abs=%.2f)", avg_abs)
+                        continue
+                    else:
+                        speech_started = True
+                        log.info("Speech started (avg_abs=%.2f)", avg_abs)
 
                 encoded_data = base64.b64encode(audio_array).decode("ascii")
 

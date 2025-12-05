@@ -18,6 +18,12 @@ async def entrypoint(ctx: agents.JobContext):
     await ctx.connect(auto_subscribe=agents.AutoSubscribe.AUDIO_ONLY)
 
     print("[Agent] connected to room:", ctx.room.name)
+    shutdown_event = asyncio.Event()
+
+    @ctx.room.on("disconnected")
+    def on_disconnected():
+        print("[Agent] Room disconnected, triggering shutdown")
+        shutdown_event.set()
 
     #############################################
     #   STT agent                               #
@@ -201,9 +207,20 @@ async def entrypoint(ctx: agents.JobContext):
 
             tts_stream.end_input()
             print(f"[TTS-Agent] end of message")
-
-    shutdown_event = asyncio.Event()
-    await shutdown_event.wait()
+    
+    try:
+        await shutdown_event.wait()
+    except asyncio.CancelledError:
+        print("[Agent] Main task cancelled")
+    finally:
+        print("[Agent] Shutting down, closing TTS stream...")
+        try:
+            await tts_stream.aclose()
+        except RuntimeError:
+            # Event loop might be closed already
+            pass
+        except Exception as e:
+            print(f"[Agent] Error closing TTS stream: {e}")
 
 
 
