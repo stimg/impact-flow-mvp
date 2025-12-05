@@ -30,7 +30,7 @@ async def entrypoint(ctx: agents.JobContext):
     # ELEVEN_API_KEY must be set in env (see livekit-plugins-elevenlabs docs)
     # You can optionally configure voice/model via env vars.
     eleven_voice_id = os.getenv("ELEVEN_VOICE_ID")  # optional, None -> default
-    eleven_model = os.getenv("ELEVEN_TTS_MODEL", "eleven_turbo_v2_5")
+    eleven_model = os.getenv("ELEVEN_TTS_MODEL", "eleven_flash_v2_5")
     eleven_language = os.getenv("ELEVEN_TTS_LANG", "de")  # match your STT "de"
 
     tts = elevenlabs.TTS(

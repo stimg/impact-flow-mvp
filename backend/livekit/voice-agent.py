@@ -4,12 +4,13 @@ import os
 import numpy as np
 
 from dotenv import load_dotenv
-from livekit.agents.tts import SynthesizedAudio
 
-from livekit import agents, rtc
 from livekit.agents.stt import SpeechEventType, SpeechEvent
 from typing import AsyncIterable
 from livekit.plugins import deepgram, elevenlabs
+
+from livekit import agents, rtc
+from livekit.agents.tts import SynthesizedAudio
 
 load_dotenv()
 
@@ -91,7 +92,7 @@ async def entrypoint(ctx: agents.JobContext):
 
     # Initialize TTS
     eleven_voice_id = os.getenv("ELEVEN_VOICE_ID")  # optional, None -> default
-    eleven_model = os.getenv("ELEVEN_TTS_MODEL", "eleven_turbo_v2_5")
+    eleven_model = os.getenv("ELEVEN_TTS_MODEL", "eleven_flash_v2_5")
     eleven_language = os.getenv("ELEVEN_TTS_LANG", "de")  # match your STT "de"
 
     tts = elevenlabs.TTS(
@@ -102,120 +103,106 @@ async def entrypoint(ctx: agents.JobContext):
         enable_ssml_parsing=False,  # keep it simple for now
         sync_alignment=False,       # no need for word timings yet
     )
+    tts_stream = tts.stream()
 
-    # Create audio source and publish TTS track
-    tts_audio_source = rtc.AudioSource(tts.sample_rate, tts.num_channels)
-    tts_track = rtc.LocalAudioTrack.create_audio_track("tts_audio", tts_audio_source)
-    tts_options = rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_MICROPHONE)
 
-    await ctx.room.local_participant.publish_track(tts_track, tts_options)
-    print(f"[TTS Agent] TTS audio track published")
+    # text_stream: AsyncIterable[str] = ... # you need to provide a stream of text
+    audio_source = rtc.AudioSource(tts.sample_rate, tts.num_channels)
+    tts_track = rtc.LocalAudioTrack.create_audio_track("agent-audio", audio_source)
+    pub = await ctx.room.local_participant.publish_track(tts_track)
+    print(f"[TTS Agent] TTS audio track published, muted: {pub.muted}, name: {tts_track.name}, sid: {tts_track.sid}, participant: {ctx.room.local_participant.identity}")
 
-    play_queue: asyncio.Queue[str] = asyncio.Queue()
+    async def send_audio(audio_stream: AsyncIterable[SynthesizedAudio]):
+        total_duration = 0.0
+        async for a in audio_stream:
+            # DEBUG: Check if audio frame has actual audio data
+            frame_data = a.frame.data.tobytes()
+            audio_array = np.frombuffer(frame_data, dtype=np.int16)
+            audio_min = audio_array.min()
+            audio_max = audio_array.max()
+            audio_avg_abs = np.abs(audio_array).mean()
+
+            duration_ms = (len(audio_array) / a.frame.num_channels) / (a.frame.sample_rate / 1000.0)
+            total_duration += duration_ms
+
+            print(f"[TTS Agent] audio frame sent: {a.frame}, duration={duration_ms:.2f}ms, total={total_duration/1000.0:.2f}s, min={audio_min}, max={audio_max}, avg_abs={audio_avg_abs:.2f}")
+
+            await audio_source.capture_frame(a.frame)
+        
+        # Wait for audio to flush (prevent race condition where signal arrives before last audio frames)
+        await asyncio.sleep(2.0)
+        
+        print(f"[TTS Agent] Audio stream finished. Sending tts_complete signal.")
+        await ctx.room.local_participant.publish_data(
+            payload=b'',
+            reliable=True,
+            topic="tts_complete"
+        )
+
+    asyncio.create_task(send_audio(tts_stream))
+
+    # Text buffering for complete sentences
+    text_buffer = ""
+
+    def extract_complete_sentences(text):
+        """
+        Extract complete sentences from text.
+        Returns: (list of complete sentences, remaining incomplete text)
+        """
+
+        # Common sentence delimiters
+        sentence_endings = r'(\n|[.!?]+[\s\n]+|[.!?]+$)'
+
+        # Split by sentence endings while keeping the delimiters
+        parts = re.split(sentence_endings, text)
+
+        sentence = ""
+        current = ""
+
+        for i, part in enumerate(parts):
+            current += part
+            # If this is a delimiter (odd indices after split) and not the last part
+            if i % 2 == 1:
+                sentence += current.strip()
+                current = ""
+
+        # Return complete sentences and any remaining incomplete text
+        return sentence, current
 
     @ctx.room.on("data_received")
     def on_data_received(data: rtc.DataPacket):
+        nonlocal text_buffer
+
         if data.topic == "chat_text":
             text_chunk = data.data.decode('utf-8')
-            print(f"[TTS-Agent] queued text for TTS: {text_chunk}")
-            play_queue.put_nowait(text_chunk)
+            # print(f"[TTS-Agent] received text chunk: {text_chunk}")
 
-    async def process_tts_chunk(text: str, audio_source: rtc.AudioSource):
-        """
-        Process text chunk through ElevenLabs TTS and stream audio to LiveKit
-        Implements duplex mode for minimal latency
-        """
-        try:
-            audio_stream = tts.stream()
+            text_buffer += text_chunk
+            sentence, remaining = extract_complete_sentences(text_buffer)
 
-            for audio_chunk in audio_stream:
-                if isinstance(audio_chunk, bytes):
-                    # Create audio frame from the chunk
-                    # PCM 16-bit samples
-                    samples_per_channel = len(audio_chunk) // 2  # 16-bit = 2 bytes per sample
+            # Send complete sentences to TTS
+            if sentence:
+                text_buffer = remaining
+                tts_stream.push_text(sentence)
 
-                    if samples_per_channel > 0:
-                        audio_frame = rtc.AudioFrame.create(
-                            tts.sample_rate,
-                            tts.num_channels,
-                            samples_per_channel
-                        )
+                print(f"[TTS-Agent] sending complete sentence: {sentence}")
 
-                        # Copy audio data to frame using numpy for efficient memory manipulation
-                        frame_array = np.frombuffer(audio_frame.data, dtype=np.int16)
-                        chunk_array = np.frombuffer(audio_chunk, dtype=np.int16)
-                        np.copyto(frame_array[:len(chunk_array)], chunk_array)
+            # Keep only the incomplete part in buffer
+            text_buffer = remaining if remaining else ''
 
-                        # Send frame to LiveKit immediately (minimal latency)
-                        await audio_source.capture_frame(audio_frame)
+        elif data.topic == "chat_text_end":
+            # Flush any remaining buffered text
+            if text_buffer:
+                remaining_text = text_buffer.strip()
+                if remaining_text:
+                    print(f"[TTS-Agent] flushing remaining text: {remaining_text}")
+                    tts_stream.push_text(remaining_text)
+                text_buffer = ""
 
-            print(f"[Agent] TTS chunk processed and streamed: {text[:50]}...")
+            tts_stream.end_input()
+            print(f"[TTS-Agent] end of message")
 
-        except Exception as e:
-            print(f"[Agent] Error processing TTS chunk: {e}")
-
-    async def synthesize_and_stream(text: str, audio_source):
-        try:
-            audio_stream = tts.synthesize(text)
-            async for audio_chunk in audio_stream:
-                await audio_source.capture_frame(audio_chunk.frame)
-
-        except Exception as e:
-            print(f"[TTS Agent] Error during synthesis: {e}")
-
-    async def speak_text(text: str) -> None:
-        """
-        Stream TTS audio into the LiveKit AudioSource using ElevenLabs plugin.
-        """
-        stream = tts.stream()
-
-        async def _pull_and_play():
-            async for audio_chunk in stream:
-                if not isinstance(audio_chunk, SynthesizedAudio):
-                    continue
-                await tts_audio_source.capture_frame(audio_chunk.frame)
-
-        pull_task = asyncio.create_task(_pull_and_play())
-
-        try:
-            stream.push_text(text)
-            stream.end_input()
-            await pull_task
-        finally:
-            await stream.aclose()
-
-    async def playback_loop() -> None:
-        print("[TTS-Agent] playback loop started; waiting for text…")
-        while True:
-            text = await play_queue.get()
-            try:
-                print(f"[TTS-Agent] speaking: {text!r}")
-                await speak_text(text)
-            except Exception as e:
-                print(f"[TTS-Agent] error during synthesis: {e}")
-            finally:
-                play_queue.task_done()
-
-    asyncio.create_task(playback_loop())
-
-    # 5) Shutdown handling -------------------------------------------------------
     shutdown_event = asyncio.Event()
-
-    # async def _on_shutdown(reason: str) -> None:
-    #     print("[Voice-Agent] shutting down… reason:", reason)
-    #     try:
-    #         await tts.aclose()
-    #     except Exception as e:
-    #         print(f"[Voice-Agent] error closing TTS: {e}")
-    #     try:
-    #         await tts_audio_source.aclose()
-    #     except Exception as e:
-    #         print(f"[Voice-Agent] error closing audio source: {e}")
-    #     shutdown_event.set()
-    #
-    # ctx.add_shutdown_callback(_on_shutdown)
-
-    # 6) Block until job is told to shut down
     await shutdown_event.wait()
 
 

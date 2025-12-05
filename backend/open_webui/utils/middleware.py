@@ -2470,10 +2470,18 @@ async def process_chat_response(
                     }
                 )
 
+                # Send end_of_input marker now that all LLM tokens have been sent
+                if lk_helper:
+                    await lk_helper.end_of_input()
+
                 await background_tasks_handler()
             except asyncio.CancelledError:
                 log.warning("Task was cancelled!")
                 await event_emitter({"type": "task-cancelled"})
+
+                # Send end_of_input marker even when cancelled
+                if lk_helper:
+                    await lk_helper.end_of_input()
 
                 if not ENABLE_REALTIME_CHAT_SAVE:
                     # Save message in the database
@@ -2489,6 +2497,7 @@ async def process_chat_response(
                 await response.background()
             
             if lk_helper:
+                await lk_helper.wait_for_tts_completion(timeout=30.0)
                 await lk_helper.disconnect()
 
         # background_tasks.add_task(post_response_handler, response, events)
