@@ -74,6 +74,7 @@ class LiveKitWebRTCHelper:
             sample_rate=sample_rate,
             num_channels=num_channels,
             frame_size_ms=100, # 100ms chunks to reduce overhead
+            capacity=30,  # Minimize buffering for low latency
         )
 
         total_duration = 0.0
