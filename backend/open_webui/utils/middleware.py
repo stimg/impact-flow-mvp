@@ -1381,7 +1381,7 @@ async def process_chat_response(
                 LIVEKIT_API_KEY = os.getenv('LIVEKIT_API_KEY')
                 LIVEKIT_API_SECRET = os.getenv('LIVEKIT_API_SECRET')
 
-                if LIVEKIT_URL and LIVEKIT_API_KEY and LIVEKIT_API_SECRET:
+                if LIVEKIT_URL and LIVEKIT_API_KEY and LIVEKIT_API_SECRET and form_data.get("livekit_call_mode", False):
                     try:
                         identity = f"backend-{uuid4().hex[:8]}"
 

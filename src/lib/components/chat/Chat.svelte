@@ -1072,7 +1072,7 @@
             model_item: $models.find((m) => m.id === modelId),
             chat_id: chatId,
             session_id: $socket?.id,
-            id: responseMessageId
+            id: responseMessageId,
         }).catch((error) => {
             toast.error(`${error}`);
             messages.at(-1).error = {content: error};
@@ -1133,10 +1133,11 @@
             model_item: $models.find((m) => m.id === modelId),
             chat_id: chatId,
             session_id: $socket?.id,
-            id: responseMessageId
+            id: responseMessageId,
         }).catch((error) => {
             toast.error(`${error}`);
             messages.at(-1).error = {content: error};
+
             return null;
         });
 
@@ -1814,6 +1815,7 @@
                 session_id: $socket?.id,
                 chat_id: $chatId,
                 id: responseMessageId,
+                livekit_call_mode: $showCallOverlay,
 
                 background_tasks: {
                     ...(!$temporaryChatEnabled &&
