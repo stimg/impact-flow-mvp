@@ -34,6 +34,7 @@ async def entrypoint(ctx: agents.JobContext):
         print(f"[STT Agent] Subscribed to audio track.")
         asyncio.create_task(process_track(track))
 
+
     async def process_track(track: rtc.RemoteTrack):
         """Process incoming audio track for STT"""
         stt = deepgram.STT(model="nova-3", language="de", endpointing_ms=500)
@@ -57,6 +58,7 @@ async def entrypoint(ctx: agents.JobContext):
 
             # Wait for STT processing to complete
             await stt_task
+
 
     async def process_stt_stream(stream: AsyncIterable[SpeechEvent]):
         """Process STT stream and publish transcripts"""
@@ -109,8 +111,6 @@ async def entrypoint(ctx: agents.JobContext):
         enable_ssml_parsing=False,  # keep it simple for now
         sync_alignment=False,       # no need for word timings yet
     )
-    tts_stream = tts.stream()
-
 
     # text_stream: AsyncIterable[str] = ... # you need to provide a stream of text
     audio_source = rtc.AudioSource(tts.sample_rate, tts.num_channels)
@@ -119,6 +119,8 @@ async def entrypoint(ctx: agents.JobContext):
     print(f"[TTS Agent] TTS audio track published, muted: {pub.muted}, name: {tts_track.name}, sid: {tts_track.sid}, participant: {ctx.room.local_participant.identity}")
 
     async def send_audio(audio_stream: AsyncIterable[SynthesizedAudio]):
+        nonlocal tts_stream_closed
+
         total_duration = 0.0
         async for a in audio_stream:
             # DEBUG: Check if audio frame has actual audio data
@@ -145,11 +147,13 @@ async def entrypoint(ctx: agents.JobContext):
             topic="tts_complete"
         )
 
-    asyncio.create_task(send_audio(tts_stream))
+        await tts_stream.aclose()
+        tts_stream_closed = True
+        print("[TTS Agent] TTS stream closed.")
 
-    # Text buffering for complete sentences
     text_buffer = ""
 
+    # Text buffering for complete sentences
     def extract_complete_sentences(text):
         """
         Extract complete sentences from text.
@@ -175,11 +179,22 @@ async def entrypoint(ctx: agents.JobContext):
         # Return complete sentences and any remaining incomplete text
         return sentence, current
 
+
+    tts_stream = tts.stream()
+    tts_stream_closed = False
+    asyncio.create_task(send_audio(tts_stream))
+
     @ctx.room.on("data_received")
     def on_data_received(data: rtc.DataPacket):
-        nonlocal text_buffer
+        nonlocal text_buffer, tts_stream, tts_stream_closed
 
         if data.topic == "chat_text":
+            # Create new TTS stream if new text input comes
+            if tts_stream_closed:
+                tts_stream = tts.stream()
+                tts_stream_closed = False
+                asyncio.create_task(send_audio(tts_stream))
+
             text_chunk = data.data.decode('utf-8')
             # print(f"[TTS-Agent] received text chunk: {text_chunk}")
 
@@ -189,6 +204,8 @@ async def entrypoint(ctx: agents.JobContext):
             # Send complete sentences to TTS
             if sentence:
                 text_buffer = remaining
+                # Add SSML start and end tags for sentence
+                sentence = f"<s>{sentence.strip()}</s>"
                 tts_stream.push_text(sentence)
 
                 print(f"[TTS-Agent] sending complete sentence: {sentence}")
@@ -208,6 +225,7 @@ async def entrypoint(ctx: agents.JobContext):
             tts_stream.end_input()
             print(f"[TTS-Agent] end of message")
     
+
     try:
         await shutdown_event.wait()
     except asyncio.CancelledError:
@@ -216,12 +234,12 @@ async def entrypoint(ctx: agents.JobContext):
         print("[Agent] Shutting down, closing TTS stream...")
         try:
             await tts_stream.aclose()
+            tts_stream_closed = True
         except RuntimeError:
             # Event loop might be closed already
             pass
         except Exception as e:
             print(f"[Agent] Error closing TTS stream: {e}")
-
 
 
 if __name__ == "__main__":

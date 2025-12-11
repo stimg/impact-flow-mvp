@@ -1,23 +1,42 @@
 import asyncio
 import logging
 import base64
+import os
 import numpy as np
+from uuid import uuid4
 
 from livekit import rtc
+from livekit import api as livekit_api
 
 log = logging.getLogger(__name__)
 
 class LiveKitWebRTCHelper:
-    def __init__(self, url: str, token: str, event_emitter):
-        self.url = url
-        self.token = token
+    def __init__(self, room_name: str, event_emitter):
+        self.room_name = room_name
         self.event_emitter = event_emitter
         self.room = rtc.Room()
         self.connected = False
 
     async def connect(self):
         try:
-            log.info(f"Connecting to LiveKit room at {self.url}")
+            LIVEKIT_URL = os.getenv('LIVEKIT_URL')
+            LIVEKIT_API_KEY = os.getenv('LIVEKIT_API_KEY')
+            LIVEKIT_API_SECRET = os.getenv('LIVEKIT_API_SECRET')
+
+            if not all([LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET]):
+                log.error("LiveKit environment variables not configured")
+                return
+
+            identity = f"backend-{uuid4().hex[:8]}"
+            token = livekit_api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET) \
+                .with_identity(identity) \
+                .with_name("Open WebUI Backend") \
+                .with_grants(livekit_api.VideoGrants(
+                    room_join=True,
+                    room=self.room_name,
+                )).to_jwt()
+
+            log.info(f"Connecting to LiveKit room {self.room_name} at {LIVEKIT_URL}")
 
             # Set up track subscription handler BEFORE connecting
             @self.room.on("track_subscribed")
@@ -46,7 +65,7 @@ class LiveKitWebRTCHelper:
                 log.info("Starting audio stream handler for TTS track name: %s, sid: %s", track.name, track.sid)
                 asyncio.create_task(self.handle_audio_stream(track))
 
-            await self.room.connect(self.url, self.token)
+            await self.room.connect(LIVEKIT_URL, token)
             self.connected = True
             self.tts_done_event = asyncio.Event()
 

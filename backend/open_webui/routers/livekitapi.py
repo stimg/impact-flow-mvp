@@ -33,16 +33,7 @@ async def get_token(session_id: str = None):
         raise HTTPException(status_code=400, detail="LiveKit is not configured on the server")
 
     identity = f"user-{uuid.uuid4().hex[:8]}"
-
-    # CRITICAL: Use session_id to ensure all participants join the SAME room
-    # This ensures frontend, backend, and voice-agent are in the same room
-    if session_id:
-        room = f"if-{session_id}"
-        log.info(f"LiveKit token requested for session {session_id}, room: {room}")
-    else:
-        # Fallback to random room (not recommended for production)
-        room = f"if-{uuid.uuid4().hex[:8]}"
-        log.warning(f"LiveKit token requested without session_id, using random room: {room}")
+    room = f"if-{uuid.uuid4().hex[:8]}"
 
     token = api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET) \
         .with_identity(identity) \
@@ -55,5 +46,5 @@ async def get_token(session_id: str = None):
     return {
         "url": LIVEKIT_URL,
         "token": token,
-        "room": room  # Return room name so frontend knows which room it joined
+        "room_name": room  # Return room name so frontend knows which room it joined
     }

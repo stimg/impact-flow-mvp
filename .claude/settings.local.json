@@ -4,7 +4,8 @@
       "mcp__context7__resolve-library-id",
       "WebFetch(domain:docs.livekit.io)",
       "mcp__context7__get-library-docs",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []

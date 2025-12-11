@@ -383,6 +383,7 @@
     };
 
     let lkRoom: Room | null = null;
+    let lkRoomName = '';
     let lkConnectionState: ConnectionState = ConnectionState.Disconnected;
     let lkMicStream: MediaStream | null = null;
     let lkMicLevel = 0;
@@ -506,7 +507,8 @@
             });
 
             const p = room.localParticipant;
-            const {url, token} = await getLivekitToken();
+            const {url, token, room_name} = await getLivekitToken();
+            lkRoomName = room_name;
             await room.connect(url, token);
             await p.publishTrack(micTrack, {
                 source: Track.Source.Microphone
@@ -1816,6 +1818,7 @@
                 chat_id: $chatId,
                 id: responseMessageId,
                 livekit_call_mode: $showCallOverlay,
+                livekit_room: lkRoomName,
 
                 background_tasks: {
                     ...(!$temporaryChatEnabled &&
