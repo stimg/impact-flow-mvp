@@ -99,17 +99,17 @@ async def entrypoint(ctx: agents.JobContext):
     #############################################
 
     # Initialize TTS
-    eleven_voice_id = os.getenv("ELEVEN_VOICE_ID")  # optional, None -> default
+    eleven_voice_id = os.getenv("ELEVEN_VOICE_ID")
     eleven_model = os.getenv("ELEVEN_TTS_MODEL", "eleven_flash_v2_5")
-    eleven_language = os.getenv("ELEVEN_TTS_LANG", "de")  # match your STT "de"
+    eleven_language = os.getenv("ELEVEN_TTS_LANG", "de")
 
     tts = elevenlabs.TTS(
         voice_id=eleven_voice_id,
         model=eleven_model,
         language=eleven_language,
-        streaming_latency=0,        # start with lowest latency; tune if choppy
-        enable_ssml_parsing=False,  # keep it simple for now
-        sync_alignment=False,       # no need for word timings yet
+        streaming_latency=0,
+        enable_ssml_parsing=True,
+        sync_alignment=False,
     )
 
     # text_stream: AsyncIterable[str] = ... # you need to provide a stream of text
@@ -119,28 +119,28 @@ async def entrypoint(ctx: agents.JobContext):
     print(f"[TTS Agent] TTS audio track published, muted: {pub.muted}, name: {tts_track.name}, sid: {tts_track.sid}, participant: {ctx.room.local_participant.identity}")
 
     async def send_audio(audio_stream: AsyncIterable[SynthesizedAudio]):
-        nonlocal tts_stream_closed
+        nonlocal tts_stream_closed, task
 
         total_duration = 0.0
         async for a in audio_stream:
             # DEBUG: Check if audio frame has actual audio data
             frame_data = a.frame.data.tobytes()
             audio_array = np.frombuffer(frame_data, dtype=np.int16)
-            audio_min = audio_array.min()
-            audio_max = audio_array.max()
-            audio_avg_abs = np.abs(audio_array).mean()
+            # audio_min = audio_array.min()
+            # audio_max = audio_array.max()
+            # audio_avg_abs = np.abs(audio_array).mean()
 
             duration_ms = (len(audio_array) / a.frame.num_channels) / (a.frame.sample_rate / 1000.0)
             total_duration += duration_ms
 
-            print(f"[TTS Agent] audio frame sent: {a.frame}, duration={duration_ms:.2f}ms, total={total_duration/1000.0:.2f}s, min={audio_min}, max={audio_max}, avg_abs={audio_avg_abs:.2f}")
+            # print(f"[TTS Agent] audio frame sent: {a.frame}, duration={duration_ms:.2f}ms, total={total_duration/1000.0:.2f}s, min={audio_min}, max={audio_max}, avg_abs={audio_avg_abs:.2f}")
 
             await audio_source.capture_frame(a.frame)
         
         # Wait for audio to flush (prevent race condition where signal arrives before last audio frames)
         await asyncio.sleep(2.0)
         
-        print(f"[TTS Agent] Audio stream finished. Sending tts_complete signal.")
+        # print(f"[TTS Agent] Audio stream finished. Sending tts_complete signal.")
         await ctx.room.local_participant.publish_data(
             payload=b'',
             reliable=True,
@@ -182,18 +182,18 @@ async def entrypoint(ctx: agents.JobContext):
 
     tts_stream = tts.stream()
     tts_stream_closed = False
-    asyncio.create_task(send_audio(tts_stream))
+    task = asyncio.create_task(send_audio(tts_stream))
 
     @ctx.room.on("data_received")
     def on_data_received(data: rtc.DataPacket):
-        nonlocal text_buffer, tts_stream, tts_stream_closed
+        nonlocal text_buffer, tts_stream, tts_stream_closed, task
 
         if data.topic == "chat_text":
             # Create new TTS stream if new text input comes
             if tts_stream_closed:
                 tts_stream = tts.stream()
                 tts_stream_closed = False
-                asyncio.create_task(send_audio(tts_stream))
+                task = asyncio.create_task(send_audio(tts_stream))
 
             text_chunk = data.data.decode('utf-8')
             # print(f"[TTS-Agent] received text chunk: {text_chunk}")

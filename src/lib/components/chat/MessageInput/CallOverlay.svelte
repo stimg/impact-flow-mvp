@@ -33,7 +33,6 @@
 
     let loading = false;
     let confirmed = false;
-    let interrupted = false;
     let assistantSpeaking = false;
 
     let emoji = null;
@@ -470,7 +469,7 @@
 
     const stopAllAudio = async () => {
         assistantSpeaking = false;
-        interrupted = true;
+        dispatch('stop-audio-stream');
 
         if (chatStreaming) {
             stopResponse();
@@ -711,12 +710,12 @@
             }
 
             const { audio, sample_rate, num_channels } = e.detail;
-            console.log('[CallOverlay] Received audio chunk:', {
-                sample_rate,
-                num_channels,
-                audioLength: audio.length,
-                contextState: audioContext.state
-            });
+            // console.log('[CallOverlay] Received audio chunk:', {
+            //     sample_rate,
+            //     num_channels,
+            //     audioLength: audio.length,
+            //     contextState: audioContext.state
+            // });
 
             // Decode base64 audio data
             const binaryString = atob(audio);
@@ -727,11 +726,11 @@
             }
             const int16Data = new Int16Array(bytes.buffer);
 
-            console.log('[CallOverlay] Decoded audio:', {
-                bytesLength: len,
-                samplesLength: int16Data.length,
-                duration: int16Data.length / sample_rate
-            });
+            // console.log('[CallOverlay] Decoded audio:', {
+            //     bytesLength: len,
+            //     samplesLength: int16Data.length,
+            //     duration: int16Data.length / sample_rate
+            // });
 
             // Create audio buffer
             const buffer = audioContext.createBuffer(

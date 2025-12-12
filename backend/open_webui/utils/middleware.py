@@ -2470,7 +2470,7 @@ async def process_chat_response(
                 await response.background()
             
             if lk_helper:
-                await lk_helper.wait_for_tts_completion(timeout=60.0)
+                await lk_helper.wait_for_tts_completion()
                 await lk_helper.disconnect()
 
         # background_tasks.add_task(post_response_handler, response, events)

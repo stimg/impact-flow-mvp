@@ -16,6 +16,7 @@ class LiveKitWebRTCHelper:
         self.event_emitter = event_emitter
         self.room = rtc.Room()
         self.connected = False
+        self.audio_stream_task = None
 
     async def connect(self):
         try:
@@ -63,7 +64,7 @@ class LiveKitWebRTCHelper:
                     return
 
                 log.info("Starting audio stream handler for TTS track name: %s, sid: %s", track.name, track.sid)
-                asyncio.create_task(self.handle_audio_stream(track))
+                self.audio_stream_task = asyncio.create_task(self.handle_audio_stream(track))
 
             await self.room.connect(LIVEKIT_URL, token)
             self.connected = True
@@ -74,6 +75,9 @@ class LiveKitWebRTCHelper:
                 if data.topic == "tts_complete":
                     log.info("Received tts_complete signal from agent")
                     self.tts_done_event.set()
+                elif data.topic == "stop_response":
+                    log.info("Received stop_response signal from frontend")
+                    self.stop_audio_stream_processing()
 
             log.info(f"Connected to LiveKit room: {self.room.name}")
 
@@ -85,49 +89,42 @@ class LiveKitWebRTCHelper:
 
         # IMPORTANT: match the TTS output format (ElevenLabs via LK: 22050 Hz, mono)
         sample_rate = 22050
-        num_channels = 1
 
         # Create an AudioStream that yields rtc.AudioFrameEvent(frame=AudioFrame)
         audio_stream = rtc.AudioStream.from_track(
             track=track,
             sample_rate=sample_rate,
-            num_channels=num_channels,
-            frame_size_ms=100, # 100ms chunks to reduce overhead
-            capacity=30,  # Minimize buffering for low latency
+            frame_size_ms=200,
         )
 
-        total_duration = 0.0
+        # total_duration = 0.0
         speech_started = False
 
         try:
             async for audio_event in audio_stream:
-                frame = audio_event.frame  # rtc.AudioFrame
-                pcm_arr = np.frombuffer(frame.data, dtype=np.int16)
-                audio_array = pcm_arr # .tobytes()
-
-                duration_ms = (len(audio_array) / num_channels) / (sample_rate / 1000.0)
-                total_duration += duration_ms
-
-                # audio_array = np.frombuffer(pcm_bytes, dtype=np.int16)
+                frame = audio_event.frame
+                audio_array = np.frombuffer(frame.data, dtype=np.int16)
                 avg_abs = np.abs(audio_array).mean()
-                log.info(
-                    "Audio frame stats: samples=%d, duration=%.2fms, total=%.2fs, min=%d, max=%d, avg_abs=%.2f",
-                    len(audio_array),
-                    duration_ms,
-                    total_duration / 1000.0,
-                    audio_array.min(),
-                    audio_array.max(),
-                    avg_abs,
-                )
+
+                # duration_ms = len(audio_array) / (sample_rate / 1000.0)
+                # total_duration += duration_ms
+                # log.info(
+                #     "Audio frame stats: samples=%d, duration=%.2fms, total=%.2fs, min=%d, max=%d, avg_abs=%.2f",
+                #     len(audio_array),
+                #     duration_ms,
+                #     total_duration / 1000.0,
+                #     audio_array.min(),
+                #     audio_array.max(),
+                #     avg_abs,
+                # )
 
                 # Filter out initial silence only
                 if not speech_started:
                     if avg_abs < 100:
-                        log.debug("Skipping initial silent frame (avg_abs=%.2f)", avg_abs)
                         continue
                     else:
                         speech_started = True
-                        log.info("Speech started (avg_abs=%.2f)", avg_abs)
+                        # log.info("Speech started (avg_abs=%.2f)", avg_abs)
 
                 encoded_data = base64.b64encode(audio_array).decode("ascii")
 
@@ -135,9 +132,9 @@ class LiveKitWebRTCHelper:
                 asyncio.create_task(self.event_emitter({
                     "type": "chat:audio",
                     "data": {
-                        "audio": encoded_data,                 # raw int16 PCM, base64
-                        "sample_rate": frame.sample_rate,      # should be 22050
-                        "num_channels": frame.num_channels,    # should be 1
+                        "audio": encoded_data,
+                        "sample_rate": frame.sample_rate,
+                        "num_channels": frame.num_channels,
                     },
                 }))
         except asyncio.CancelledError:
@@ -183,7 +180,7 @@ class LiveKitWebRTCHelper:
         except Exception as e:
             log.error(f"Failed to send text to LiveKit: {e}")
 
-    async def wait_for_tts_completion(self, timeout: float = 30.0):
+    async def wait_for_tts_completion(self, timeout: float = 300.0):
         """Wait for the TTS agent to signal completion or timeout."""
         if not self.connected:
             return
@@ -200,3 +197,8 @@ class LiveKitWebRTCHelper:
             await self.room.disconnect()
             self.connected = False
             log.info("Disconnected from LiveKit room")
+
+    def stop_audio_stream_processing(self):
+        if self.audio_stream_task and not self.audio_stream_task.done():
+            self.audio_stream_task.cancel()
+            log.info("Cancelled audio stream task")

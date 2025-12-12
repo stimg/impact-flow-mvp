@@ -170,6 +170,7 @@
                                 {lkMicLevel}
                                 on:startLivekitAsr={() => dispatch('startLivekitAsr')}
                                 on:stopLivekitAsr={() => dispatch('stopLivekitAsr')}
+                                on:stop-audio-stream={() => dispatch('stop-audio-stream')}
 								on:close={() => showControls.set(false)}
 							/>
 						</div>
@@ -253,6 +254,7 @@
                                     {lkMicLevel}
                                     on:startLivekitAsr={() => dispatch('startLivekitAsr')}
                                     on:stopLivekitAsr={() => dispatch('stopLivekitAsr')}
+                                    on:stop-audio-stream={() => dispatch('stop-audio-stream')}
                                     on:close={() => showControls.set(false)}
 								/>
 							</div>

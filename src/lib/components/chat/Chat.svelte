@@ -543,6 +543,22 @@
         }
     }
 
+    const stopAudioStream = async () => {
+        console.log('stopAudioStream');
+        if (lkConnectionState === ConnectionState.Connected && lkRoom) {
+            try {
+                const payload = new TextEncoder().encode("stop_response");
+                await lkRoom.localParticipant.publishData(payload, {
+                    reliable: true,
+                    topic: "stop_response"
+                });
+                console.log("[FE] Sent stop_response signal");
+            } catch (e) {
+                console.error("[FE] Failed to send stop_response signal:", e);
+            }
+        }
+    }
+
     let pageSubscribe = null;
     onMount(async () => {
         loading = true;
@@ -2364,6 +2380,10 @@
                     }}
                         on:stopLivekitAsr={() => {
                       stopLivekitAsr();
+                    }}
+
+                        on:stop-audio-stream={() => {
+                        stopAudioStream();
                     }}
                 />
             </PaneGroup>
