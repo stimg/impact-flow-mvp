@@ -50,7 +50,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy all remaining pplication files into the container
 # This includes source code, configuration files, and dependency specifications
 # (Excludes files specified in .dockerignore)
-COPY stt-agent .
+COPY . .
 
 # Change ownership of all app files to the non-privileged user
 # This ensures the application can read/write files as needed
@@ -63,8 +63,8 @@ USER appuser
 # Pre-download any ML models or files the agent needs
 # This ensures the container is ready to run immediately without downloading
 # dependencies at runtime, which improves startup time and reliability
-RUN python "stt-agent.py" download-files
+RUN python "voice-agent.py" download-files
 
 # Run the application
 # The "start" command tells the worker to connect to LiveKit and begin waiting for jobs.
-CMD ["python", "stt-agent.py", "start"]
+CMD ["python", "voice-agent.py", "start"]
