@@ -17,6 +17,7 @@ class LiveKitWebRTCHelper:
         self.room = rtc.Room()
         self.connected = False
         self.audio_stream_task = None
+        self.audio_stream = None
 
     async def connect(self):
         try:
@@ -77,7 +78,7 @@ class LiveKitWebRTCHelper:
                     self.tts_done_event.set()
                 elif data.topic == "stop_response":
                     log.info("Received stop_response signal from frontend")
-                    self.stop_audio_stream_processing()
+                    asyncio.create_task(self.stop_audio_stream_processing())
 
             log.info(f"Connected to LiveKit room: {self.room.name}")
 
@@ -90,18 +91,17 @@ class LiveKitWebRTCHelper:
         # IMPORTANT: match the TTS output format (ElevenLabs via LK: 22050 Hz, mono)
         sample_rate = 22050
 
-        # Create an AudioStream that yields rtc.AudioFrameEvent(frame=AudioFrame)
-        audio_stream = rtc.AudioStream.from_track(
+        self.audio_stream = rtc.AudioStream.from_track(
             track=track,
             sample_rate=sample_rate,
-            frame_size_ms=200,
+            frame_size_ms=50,
         )
 
         # total_duration = 0.0
         speech_started = False
 
         try:
-            async for audio_event in audio_stream:
+            async for audio_event in self.audio_stream:
                 frame = audio_event.frame
                 audio_array = np.frombuffer(frame.data, dtype=np.int16)
                 avg_abs = np.abs(audio_array).mean()
@@ -145,7 +145,7 @@ class LiveKitWebRTCHelper:
         finally:
             # ensure stream is closed and FFI resources cleaned up
             try:
-                await audio_stream.aclose()
+                await self.audio_stream.aclose()
             except Exception:
                 pass
 
@@ -198,7 +198,14 @@ class LiveKitWebRTCHelper:
             self.connected = False
             log.info("Disconnected from LiveKit room")
 
-    def stop_audio_stream_processing(self):
+    async def stop_audio_stream_processing(self):
         if self.audio_stream_task and not self.audio_stream_task.done():
             self.audio_stream_task.cancel()
             log.info("Cancelled audio stream task")
+        
+        if self.audio_stream:
+            try:
+                await self.audio_stream.aclose()
+                log.info("Closed audio stream")
+            except Exception as e:
+                log.error(f"Failed to close audio stream: {e}")

@@ -208,7 +208,7 @@ async def entrypoint(ctx: agents.JobContext):
                 sentence = f"<s>{sentence.strip()}</s>"
                 tts_stream.push_text(sentence)
 
-                print(f"[TTS-Agent] sending complete sentence: {sentence}")
+                # print(f"[TTS-Agent] sending complete sentence: {sentence}")
 
             # Keep only the incomplete part in buffer
             text_buffer = remaining if remaining else ''
@@ -224,6 +224,29 @@ async def entrypoint(ctx: agents.JobContext):
 
             tts_stream.end_input()
             print(f"[TTS-Agent] end of message")
+        
+        elif data.topic == "stop_response":
+            asyncio.create_task(handle_stop_signal())
+            
+
+
+    async def handle_stop_signal():
+        nonlocal text_buffer, tts_stream, tts_stream_closed, task
+        print("[TTS-Agent] Received stop_response signal")
+        text_buffer = ""
+        
+        if not tts_stream_closed:
+            await tts_stream.aclose()
+            tts_stream_closed = True
+        
+        if task and not task.done():
+            task.cancel()
+        
+        # Reset
+        tts_stream = tts.stream()
+        tts_stream_closed = False
+        task = asyncio.create_task(send_audio(tts_stream))
+        print("[TTS-Agent] Reset TTS stream for new input (stop_response)")
     
 
     try:
