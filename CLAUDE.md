@@ -36,7 +36,7 @@ This is **Open WebUI** (formerly Ollama WebUI), a fork customized as "impact-flo
 
 **RAG Pipeline**: Document retrieval and embedding system in `backend/open_webui/retrieval/` with support for multiple vector databases (ChromaDB, Milvus, Qdrant, etc.).
 
-**LiveKit Integration**: Voice/video call capabilities using LiveKit in `backend/livekit/` with separate workspace members for voice-agent and stt-agent.
+**LiveKit Integration**: Voice/video call capabilities using LiveKit in `backend/livekit/` with separate workspace members for voice-agent.
 
 **Database**: Supports SQLite (default), PostgreSQL, and MySQL. Connection configured via `DATABASE_URL` environment variable.
 
