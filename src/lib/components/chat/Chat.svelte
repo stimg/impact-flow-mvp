@@ -1365,7 +1365,7 @@
                             new CustomEvent('chat', {
                                 detail: {
                                     id: message.id,
-                                    content: messageContentParts[messageContentParts.length - 1]
+                                    content: message.lastSentence
                                 }
                             })
                         );
@@ -1399,7 +1399,7 @@
                     new CustomEvent('chat', {
                         detail: {
                             id: message.id,
-                            content: messageContentParts[messageContentParts.length - 1]
+                            content: message.lastSentence
                         }
                     })
                 );
