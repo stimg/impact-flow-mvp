@@ -1374,18 +1374,6 @@ async def process_chat_response(
 
         # Handle as a background task
         async def post_response_handler(response, events):
-            lk_helper = None
-            try:
-                lk_room = form_data.get("livekit_room")
-                if lk_room and form_data.get("livekit_call_mode", False):
-                    try:
-                        lk_helper = LiveKitWebRTCHelper(lk_room, event_emitter)
-                        await lk_helper.connect()
-                    except Exception as e:
-                        log.error(f"Failed to initialize LiveKit helper: {e}", exc_info=True)
-            except Exception as e:
-                log.error(f"Error setting up LiveKit: {e}", exc_info=True)
-
             def serialize_content_blocks(content_blocks, raw=False):
                 content = ""
 
@@ -1935,12 +1923,6 @@ async def process_chat_response(
                                         }
 
                                     if value:
-                                        if lk_helper:
-                                            log.debug(f"LiveKit: Sending text chunk: {value[:50]}...")
-                                            asyncio.create_task(lk_helper.send_text(value))
-                                        else:
-                                            log.debug(f"LiveKit: lk_helper not initialized, skipping text send")
-
                                         if (
                                             content_blocks
                                             and content_blocks[-1]["type"]
@@ -2443,18 +2425,10 @@ async def process_chat_response(
                     }
                 )
 
-                # Send end_of_input marker now that all LLM tokens have been sent
-                if lk_helper:
-                    await lk_helper.end_of_input()
-
                 await background_tasks_handler()
             except asyncio.CancelledError:
                 log.warning("Task was cancelled!")
                 await event_emitter({"type": "task-cancelled"})
-
-                # Send end_of_input marker even when cancelled
-                if lk_helper:
-                    await lk_helper.end_of_input()
 
                 if not ENABLE_REALTIME_CHAT_SAVE:
                     # Save message in the database
@@ -2469,10 +2443,6 @@ async def process_chat_response(
             if response.background is not None:
                 await response.background()
             
-            if lk_helper:
-                await lk_helper.wait_for_tts_completion()
-                await lk_helper.disconnect()
-
         # background_tasks.add_task(post_response_handler, response, events)
         task_id, _ = await create_task(
             request, post_response_handler(response, events), id=metadata["chat_id"]

@@ -238,12 +238,6 @@
                     }
                 } else if (type === 'chat:completion') {
                     chatCompletionEventHandler(data, message, event.chat_id);
-                } else if (type === 'chat:audio') {
-                    eventTarget.dispatchEvent(
-                        new CustomEvent('chat:audio', {
-                            detail: data
-                        })
-                    );
                 } else if (type === 'chat:message:delta' || type === 'message') {
                     message.content += data.content;
                 } else if (type === 'chat:message' || type === 'replace') {
@@ -417,8 +411,19 @@
         processFrame();
     };
 
+    const sendText = async (e) => {
+        const { content, topic } = e.detail;
+        await lkRoom!.localParticipant.publishData(
+            new TextEncoder().encode(content),
+            {
+                reliable: true,
+                topic
+            }
+        )
 
-    export const startLivekitAsr = async () => {
+    }
+
+    export const startLivekit = async () => {
         console.log('startLivekitAsr');
         if (lkConnectionState === ConnectionState.Connected || lkConnectionState === ConnectionState.Connecting) return;
         try {
@@ -470,6 +475,8 @@
                 prompt = '';
                 lkRoom = room;
                 processMicLevel();
+                eventTarget.addEventListener('chat', sendText);
+                eventTarget.addEventListener('chat:finish', sendText);
                 console.log(`[FE] connected: room: ${room.name}, identity: ${room.localParticipant.identity}`);
                 toast.success($i18n.t('Listening...'));
             });
@@ -520,7 +527,7 @@
         }
     }
 
-    export const stopLivekitAsr = async () => {
+    export const stopLivekit = async () => {
         console.log('stopLivekitAsr');
         if (lkConnectionState === ConnectionState.Disconnected) return;
         try {
@@ -635,7 +642,7 @@
     onDestroy(() => {
         pageSubscribe();
         chatIdUnsubscriber?.();
-        stopLivekitAsr();
+        stopLivekit();
         window.removeEventListener('message', onMessageHandler);
         $socket?.off('chat-events', chatEventHandler);
     });
@@ -1365,6 +1372,7 @@
                             new CustomEvent('chat', {
                                 detail: {
                                     id: message.id,
+                                    topic: 'chat_text',
                                     content: message.lastSentence
                                 }
                             })
@@ -1399,6 +1407,7 @@
                     new CustomEvent('chat', {
                         detail: {
                             id: message.id,
+                            topic: 'chat_text',
                             content: message.lastSentence
                         }
                     })
@@ -1446,6 +1455,7 @@
                 new CustomEvent('chat:finish', {
                     detail: {
                         id: message.id,
+                        topic: 'chat_text_end',
                         content: message.content
                     }
                 })
@@ -1572,7 +1582,7 @@
         saveSessionSelectedModels();
 
         if (!$showCallOverlay) {
-            await stopLivekitAsr();
+            await stopLivekit();
         }
         await sendPrompt(history, userPrompt, userMessageId, {newChat: true});
     };
@@ -2289,10 +2299,10 @@
                                         }
                                     }}
                                         on:stopLivekitAsr={() => {
-                                      stopLivekitAsr();
+                                      stopLivekit();
                                     }}
                                         on:startLivekitAsr={() => {
-                                      startLivekitAsr();
+                                      startLivekit();
                                     }}
                                 />
 
@@ -2342,10 +2352,10 @@
 										}
 									}}
                                         on:stopLivekitAsr={() => {
-                                      stopLivekitAsr();
+                                      stopLivekit();
                                     }}
                                         on:startLivekitAsr={() => {
-                                      startLivekitAsr();
+                                      startLivekit();
                                     }}
                                 />
                             </div>
@@ -2376,10 +2386,10 @@
                         {lkConnectionState}
                         {lkMicLevel}
                         on:startLivekitAsr={() => {
-                      startLivekitAsr();
+                      startLivekit();
                     }}
                         on:stopLivekitAsr={() => {
-                      stopLivekitAsr();
+                      stopLivekit();
                     }}
 
                         on:stop-audio-stream={() => {

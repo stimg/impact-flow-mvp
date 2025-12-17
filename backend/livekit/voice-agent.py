@@ -151,42 +151,13 @@ async def entrypoint(ctx: agents.JobContext):
         tts_stream_closed = True
         print("[TTS Agent] TTS stream closed.")
 
-    text_buffer = ""
-
-    # Text buffering for complete sentences
-    def extract_complete_sentences(text):
-        """
-        Extract complete sentences from text.
-        Returns: (list of complete sentences, remaining incomplete text)
-        """
-
-        # Common sentence delimiters
-        sentence_endings = r'(\n|[.!?]+[\s\n]+|[.!?]+$)'
-
-        # Split by sentence endings while keeping the delimiters
-        parts = re.split(sentence_endings, text)
-
-        sentence = ""
-        current = ""
-
-        for i, part in enumerate(parts):
-            current += part
-            # If this is a delimiter (odd indices after split) and not the last part
-            if i % 2 == 1:
-                sentence += current.strip()
-                current = ""
-
-        # Return complete sentences and any remaining incomplete text
-        return sentence, current
-
-
     tts_stream = tts.stream()
     tts_stream_closed = False
     task = asyncio.create_task(send_audio(tts_stream))
 
     @ctx.room.on("data_received")
     def on_data_received(data: rtc.DataPacket):
-        nonlocal text_buffer, tts_stream, tts_stream_closed, task
+        nonlocal tts_stream, tts_stream_closed, task
 
         if data.topic == "chat_text":
             # Create new TTS stream if new text input comes
@@ -195,34 +166,21 @@ async def entrypoint(ctx: agents.JobContext):
                 tts_stream_closed = False
                 task = asyncio.create_task(send_audio(tts_stream))
 
-            text_chunk = data.data.decode('utf-8')
-            # print(f"[TTS-Agent] received text chunk: {text_chunk}")
-
-            text_buffer += text_chunk
-            sentence, remaining = extract_complete_sentences(text_buffer)
 
             # Send complete sentences to TTS
-            if sentence:
-                text_buffer = remaining
-                # Add SSML start and end tags for sentence
-                sentence = f"<s>{sentence.strip()}</s>"
-                tts_stream.push_text(sentence)
+            sentence = data.data.decode('utf-8')
+            sentence = f"<s>{sentence}</s>"
+            tts_stream.push_text(sentence)
 
-                # print(f"[TTS-Agent] sending complete sentence: {sentence}")
-
-            # Keep only the incomplete part in buffer
-            text_buffer = remaining if remaining else ''
+            print(f"[TTS-Agent] sending sentence: {sentence}")
 
         elif data.topic == "chat_text_end":
-            # Flush any remaining buffered text
-            if text_buffer:
-                remaining_text = text_buffer.strip()
-                if remaining_text:
-                    print(f"[TTS-Agent] flushing remaining text: {remaining_text}")
-                    tts_stream.push_text(remaining_text)
-                text_buffer = ""
-
+            sentence = data.data.decode('utf-8')
+            sentence = f"<s>{sentence}</s>"
+            tts_stream.push_text(sentence)
             tts_stream.end_input()
+
+            print(f"[TTS-Agent] sending sentence: {sentence}")
             print(f"[TTS-Agent] end of message")
         
         elif data.topic == "stop_response":
@@ -231,10 +189,9 @@ async def entrypoint(ctx: agents.JobContext):
 
 
     async def handle_stop_signal():
-        nonlocal text_buffer, tts_stream, tts_stream_closed, task
+        nonlocal tts_stream, tts_stream_closed, task
         print("[TTS-Agent] Received stop_response signal")
-        text_buffer = ""
-        
+
         if not tts_stream_closed:
             await tts_stream.aclose()
             tts_stream_closed = True
