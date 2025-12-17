@@ -308,4 +308,12 @@ dist
 cypress/videos
 cypress/screenshots
 .vscode/settings.json
-/backend/pg_backup/
+/backend/pg_backup/auth.sql
+/backend/pg_backup/config.sql
+/backend/pg_backup/empfehlungsregister.sql
+/backend/pg_backup/function.sql
+/backend/pg_backup/product_chunks.sql
+/backend/pg_backup/product_recommendations.sql
+/backend/pg_backup/q_and_a.sql
+/backend/pg_backup/q_and_a_1.sql
+/backend/pg_backup/user.sql
