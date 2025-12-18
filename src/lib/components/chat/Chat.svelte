@@ -43,7 +43,6 @@
     let controlPaneComponent;
 
     let autoScroll = true;
-    let processing = '';
     let messagesContainerElement: HTMLDivElement;
 
     let navbarElement;
@@ -379,6 +378,7 @@
     let lkRoom: Room | null = null;
     let lkRoomName = '';
     let lkConnectionState: ConnectionState = ConnectionState.Disconnected;
+    let lkAgentInfo: object | null = null;
     let lkMicStream: MediaStream | null = null;
     let lkMicLevel = 0;
     const setLkMicLevel = (level: number) => lkMicLevel = level;
@@ -420,11 +420,10 @@
                 topic
             }
         )
-
     }
 
     export const startLivekit = async () => {
-        console.log('startLivekitAsr');
+        console.log('startLivekit');
         if (lkConnectionState === ConnectionState.Connected || lkConnectionState === ConnectionState.Connecting) return;
         try {
             prompt = $i18n.t('Connecting...')
@@ -464,34 +463,35 @@
             if (!micTrack) throw new Error("[Chat] Microphone track unavailable");
 
             // LiveKit connection & publish
-            const room = new Room({adaptiveStream: true, dynacast: true});
+            lkRoom = new Room({adaptiveStream: true, dynacast: true});
 
-            room.on(RoomEvent.ConnectionStateChanged, (state) => {
+            lkRoom.on(RoomEvent.ConnectionStateChanged, (state) => {
                 lkConnectionState = state;
-                console.log('[FE] Connection state changed:', state);
+                console.log('[Chat] Connection state changed:', state);
             })
 
-            room.on(RoomEvent.Connected, () => {
+            lkRoom.on(RoomEvent.Connected, () => {
                 prompt = '';
-                lkRoom = room;
                 processMicLevel();
-                eventTarget.addEventListener('chat', sendText);
-                eventTarget.addEventListener('chat:finish', sendText);
-                console.log(`[FE] connected: room: ${room.name}, identity: ${room.localParticipant.identity}`);
+                if ($showCallOverlay) {
+                    eventTarget.addEventListener('chat', sendText);
+                    eventTarget.addEventListener('chat:finish', sendText);
+                }
+                console.log(`[Chat] connected: room: ${lkRoom.name}, identity: ${lkRoom.localParticipant.identity}`);
                 toast.success($i18n.t('Listening...'));
             });
 
-            room.on(RoomEvent.Disconnected, () => {
+            lkRoom.on(RoomEvent.Disconnected, () => {
                 console.log('[Frontend] disconnected:', {
-                    serverRoomName: room.name,
-                    myIdentity: room.localParticipant.identity,
+                    serverRoomName: lkRoom.name,
+                    myIdentity: lkRoom.localParticipant.identity,
                 });
             });
 
-            room.on(RoomEvent.DataReceived, (payload: Uint8Array, participant, kind, topic) => {
+            lkRoom.on(RoomEvent.DataReceived, (payload: Uint8Array, participant, kind, topic) => {
                 const text = new TextDecoder().decode(payload);
                 if (topic === 'system') {
-                    console.log('[FE] System message: ', text);
+                    console.log('[Chat] System message: ', text);
 
                     // Initial voice commands handling
                     if (text === "delete") {
@@ -501,7 +501,7 @@
                     }
 
                 } else if (topic === "transcript") {
-                    console.log("[FE] Transcribed prompt: ", text);
+                    console.log("[Chat] Transcribed prompt: ", text);
                     prompt = text;
 
                     // Dispatch event with the transcript text
@@ -511,12 +511,48 @@
                         })
                     );
                 }
+                else if (topic === "agent_info") {
+                    const text = new TextDecoder().decode(payload);
+                    lkAgentInfo = JSON.parse(text);
+
+                    console.log("[Chat] Got agent info: ", lkAgentInfo);
+                } else if (topic === 'tts_start') {
+                    eventTarget.dispatchEvent(
+                        new CustomEvent('tts:start')
+                    )
+
+                    console.log("[Chat] TTS start signal received.");
+                } else if (topic === 'tts_complete') {
+                    eventTarget.dispatchEvent(
+                        new CustomEvent('tts:complete')
+                    )
+
+                    console.log("[Chat] TTS complete signal received.");
+                }
             });
 
-            const p = room.localParticipant;
+            // Play new tracks as they are subscribed
+            lkRoom.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+                if (track.kind === Track.Kind.Audio) {
+                    const audioEl = track.attach();
+                    audioEl.autoplay = true;
+                    audioEl.controls = true;
+                    document.body.appendChild(audioEl);
+
+                    console.log("[Chat] Attached audio for participant: ", participant.identity);
+                }
+            });
+
+            // Cleanup when unsubscribed
+            lkRoom.on(RoomEvent.TrackUnsubscribed, (track) => {
+                const els = track.detach();
+                els.forEach(el => el.remove());
+            });
+
+            const p = lkRoom.localParticipant;
             const {url, token, room_name} = await getLivekitToken();
             lkRoomName = room_name;
-            await room.connect(url, token);
+            await lkRoom.connect(url, token);
             await p.publishTrack(micTrack, {
                 source: Track.Source.Microphone
             });
@@ -528,7 +564,7 @@
     }
 
     export const stopLivekit = async () => {
-        console.log('stopLivekitAsr');
+        console.log('[Chat] Stop livekit.');
         if (lkConnectionState === ConnectionState.Disconnected) return;
         try {
             if (lkRoom) {
@@ -545,13 +581,19 @@
                 lkMicStream = null;
             }
 
+            // Send sentences to TTS if the CallOverlay opened
+            if ($showCallOverlay) {
+                eventTarget.removeEventListener('chat', sendText);
+                eventTarget.removeEventListener('chat:finish', sendText);
+            }
+
         } finally {
             console.log('[Chat] LiveKit disconnected from room.');
         }
     }
 
     const stopAudioStream = async () => {
-        console.log('stopAudioStream');
+        console.log('[Chat] Got stop response signal. Stopping audio stream...');
         if (lkConnectionState === ConnectionState.Connected && lkRoom) {
             try {
                 const payload = new TextEncoder().encode("stop_response");
@@ -559,9 +601,9 @@
                     reliable: true,
                     topic: "stop_response"
                 });
-                console.log("[FE] Sent stop_response signal");
+                console.log("[Chat] Sent stop_response signal");
             } catch (e) {
-                console.error("[FE] Failed to send stop_response signal:", e);
+                console.error("[Chat] Failed to send stop_response signal:", e);
             }
         }
     }
@@ -2298,10 +2340,10 @@
                                             );
                                         }
                                     }}
-                                        on:stopLivekitAsr={() => {
+                                        on:stopLivekit={() => {
                                       stopLivekit();
                                     }}
-                                        on:startLivekitAsr={() => {
+                                        on:startLivekit={() => {
                                       startLivekit();
                                     }}
                                 />
@@ -2351,10 +2393,10 @@
 											);
 										}
 									}}
-                                        on:stopLivekitAsr={() => {
+                                        on:stopLivekit={() => {
                                       stopLivekit();
                                     }}
-                                        on:startLivekitAsr={() => {
+                                        on:startLivekit={() => {
                                       startLivekit();
                                     }}
                                 />
@@ -2385,14 +2427,14 @@
                         {eventTarget}
                         {lkConnectionState}
                         {lkMicLevel}
-                        on:startLivekitAsr={() => {
+                        on:startLivekit={() => {
                       startLivekit();
                     }}
-                        on:stopLivekitAsr={() => {
+                        on:stopLivekit={() => {
                       stopLivekit();
                     }}
 
-                        on:stop-audio-stream={() => {
+                        on:stopAudioStream={() => {
                         stopAudioStream();
                     }}
                 />

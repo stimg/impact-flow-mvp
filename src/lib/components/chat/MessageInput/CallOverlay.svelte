@@ -469,7 +469,7 @@
 
     const stopAllAudio = async () => {
         assistantSpeaking = false;
-        dispatch('stop-audio-stream');
+        dispatch('stopAudioStream');
 
         if (chatStreaming) {
             stopResponse();
@@ -691,108 +691,14 @@
         }, LIVEKIT_AUTO_SUBMIT_DELAY);
     };
 
-    let audioContext = null;
-    let nextStartTime = 0;
+    const ttsBeginHandler = () => {
+        lkThinking = false;
+        assistantSpeaking = true;
+    }
 
-    const chatAudioHandler = async (e) => {
-        try {
-            // Create AudioContext if needed
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                console.log('[CallOverlay] AudioContext created, state:', audioContext.state);
-            }
-
-            // CRITICAL: Resume AudioContext if suspended (browser autoplay policy)
-            if (audioContext.state === 'suspended') {
-                console.log('[CallOverlay] Resuming suspended AudioContext...');
-                await audioContext.resume();
-                console.log('[CallOverlay] AudioContext resumed, state:', audioContext.state);
-            }
-
-            const { audio, sample_rate, num_channels } = e.detail;
-            // console.log('[CallOverlay] Received audio chunk:', {
-            //     sample_rate,
-            //     num_channels,
-            //     audioLength: audio.length,
-            //     contextState: audioContext.state
-            // });
-
-            // Decode base64 audio data
-            const binaryString = atob(audio);
-            const len = binaryString.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-            }
-            const int16Data = new Int16Array(bytes.buffer);
-
-            // console.log('[CallOverlay] Decoded audio:', {
-            //     bytesLength: len,
-            //     samplesLength: int16Data.length,
-            //     duration: int16Data.length / sample_rate
-            // });
-
-            // Create audio buffer
-            const buffer = audioContext.createBuffer(
-                num_channels || 1, // Use num_channels from data or default to 1
-                int16Data.length,
-                sample_rate
-            );
-
-            // Convert int16 to float32 and fill buffer
-            const channelData = buffer.getChannelData(0);
-            for (let i = 0; i < int16Data.length; i++) {
-                channelData[i] = int16Data[i] / 32768.0;
-            }
-
-            // Debug: Check audio data range
-            const minVal = Math.min(...channelData);
-            const maxVal = Math.max(...channelData);
-            const avgAbsVal = channelData.reduce((sum, val) => sum + Math.abs(val), 0) / channelData.length;
-            console.log('[CallOverlay] Audio data stats:', {
-                min: minVal,
-                max: maxVal,
-                avgAbsolute: avgAbsVal,
-                firstSamples: Array.from(int16Data.slice(0, 10))
-            });
-
-            // Create and connect audio source
-            const source = audioContext.createBufferSource();
-            source.buffer = buffer;
-            source.connect(audioContext.destination);
-
-            // Schedule audio playback
-            if (nextStartTime < audioContext.currentTime) {
-                nextStartTime = audioContext.currentTime;
-            }
-
-            console.log('[CallOverlay] Scheduling audio:', {
-                currentTime: audioContext.currentTime,
-                startTime: nextStartTime,
-                duration: buffer.duration
-            });
-
-            source.start(nextStartTime);
-            nextStartTime += buffer.duration;
-
-            // Update UI state
-            if (!assistantSpeaking) {
-                assistantSpeaking = true;
-                lkThinking = false;
-                console.log('[CallOverlay] Assistant started speaking');
-            }
-
-            source.onended = () => {
-                console.log('[CallOverlay] Audio chunk finished playing');
-                if (audioContext.currentTime >= nextStartTime - 0.1) {
-                    assistantSpeaking = false;
-                    console.log('[CallOverlay] Assistant stopped speaking');
-                }
-            };
-        } catch (error) {
-            console.error('[CallOverlay] Error in chatAudioHandler:', error);
-        }
-    };
+    const ttsCompleteHandler = () => {
+        assistantSpeaking = false;
+    }
 
     onMount(async () => {
         const setWakeLock = async () => {
@@ -828,12 +734,12 @@
         if (LIVEKIT_ENABLED) {
             // Start LiveKit automatically when overlay opens
             console.log('[CallOverlay] Starting LiveKit ASR automatically');
-            dispatch('startLivekitAsr');
+            dispatch('startLivekit');
 
             // Listen for transcript ready events
             eventTarget.addEventListener('transcript:ready', transcriptReadyHandler);
-            // Use LiveKit audio handler instead of default audio processing
-            eventTarget.addEventListener('chat:audio', chatAudioHandler);
+            eventTarget.addEventListener('tts:start', ttsBeginHandler);
+            eventTarget.addEventListener('tts:complete', ttsCompleteHandler);
         } else {
             await startRecording();
             // Use default audio processing when LiveKit is disabled
@@ -848,13 +754,15 @@
 
             if (LIVEKIT_ENABLED) {
                 eventTarget.removeEventListener('transcript:ready', transcriptReadyHandler);
-                eventTarget.removeEventListener('chat:audio', chatAudioHandler);
+                eventTarget.removeEventListener('tts:start', ttsBeginHandler);
+                eventTarget.removeEventListener('tts:complete', ttsCompleteHandler);
+
                 if (lkAutoSubmitTimeout) {
                     clearTimeout(lkAutoSubmitTimeout);
                     lkAutoSubmitTimeout = null;
                 }
 
-                dispatch('stopLivekitAsr');
+                dispatch('stopLivekit');
             } else {
                 eventTarget.removeEventListener('chat:start', chatStartHandler);
                 eventTarget.removeEventListener('chat', chatEventHandler);
@@ -886,13 +794,15 @@
 
         if (LIVEKIT_ENABLED) {
             eventTarget.removeEventListener('transcript:ready', transcriptReadyHandler);
-            eventTarget.removeEventListener('chat:audio', chatAudioHandler);
+            eventTarget.removeEventListener('tts:start', ttsBeginHandler);
+            eventTarget.removeEventListener('tts:complete', ttsCompleteHandler);
+
             if (lkAutoSubmitTimeout) {
                 clearTimeout(lkAutoSubmitTimeout);
                 lkAutoSubmitTimeout = null;
             }
             stopResponse();
-            dispatch('stopLivekitAsr');
+            dispatch('stopLivekit');
         } else {
             eventTarget.removeEventListener('chat:start', chatStartHandler);
             eventTarget.removeEventListener('chat', chatEventHandler);
@@ -922,6 +832,7 @@
 
 					showCallOverlay.set(false);
 					dispatch('close');
+                    dispatch('stopLivekit')
 				}}
                     type="button"
             >
@@ -1293,9 +1204,9 @@
 						if (assistantSpeaking || lkThinking) {
 							stopAllAudio();
 						} else if (lkConnectionState === ConnectionState.Connected) {
-							dispatch('stopLivekitAsr');
+							dispatch('stopLivekit');
 						} else if (lkConnectionState === ConnectionState.Disconnected) {
-							dispatch('startLivekitAsr');
+							dispatch('startLivekit');
 						}
 					}}
                 >

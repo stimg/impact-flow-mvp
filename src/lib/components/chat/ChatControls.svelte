@@ -168,9 +168,9 @@
 								{eventTarget}
                                 {lkConnectionState}
                                 {lkMicLevel}
-                                on:startLivekitAsr={() => dispatch('startLivekitAsr')}
-                                on:stopLivekitAsr={() => dispatch('stopLivekitAsr')}
-                                on:stop-audio-stream={() => dispatch('stop-audio-stream')}
+                                on:startLivekit={() => dispatch('startLivekit')}
+                                on:stopLivekit={() => dispatch('stopLivekit')}
+                                on:stopAudioStream={() => dispatch('stopAudioStream')}
 								on:close={() => showControls.set(false)}
 							/>
 						</div>
@@ -252,9 +252,9 @@
 									{eventTarget}
                                     {lkConnectionState}
                                     {lkMicLevel}
-                                    on:startLivekitAsr={() => dispatch('startLivekitAsr')}
-                                    on:stopLivekitAsr={() => dispatch('stopLivekitAsr')}
-                                    on:stop-audio-stream={() => dispatch('stop-audio-stream')}
+                                    on:startLivekit={() => dispatch('startLivekit')}
+                                    on:stopLivekit={() => dispatch('stopLivekit')}
+                                    on:stopAudioStream={() => dispatch('stopAudioStream')}
                                     on:close={() => showControls.set(false)}
 								/>
 							</div>

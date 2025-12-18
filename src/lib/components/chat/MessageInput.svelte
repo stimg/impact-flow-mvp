@@ -1426,10 +1426,10 @@
 													on:click={async () => {
 														if (LIVEKIT_ENABLED) {
 															if (lkConnectionState !== ConnectionState.Connected) {
-																dispatch('startLivekitAsr');
+																dispatch('startLivekit');
 																recording = true;
 															} else {
-																dispatch('stopLivekitAsr');
+																dispatch('stopLivekit');
 																recording = false;
 															}
 														} else {

@@ -1,4 +1,5 @@
 import asyncio
+import json
 import re
 import os
 import numpy as np
@@ -116,13 +117,34 @@ async def entrypoint(ctx: agents.JobContext):
     audio_source = rtc.AudioSource(tts.sample_rate, tts.num_channels)
     tts_track = rtc.LocalAudioTrack.create_audio_track("agent-audio", audio_source)
     pub = await ctx.room.local_participant.publish_track(tts_track)
+    await ctx.room.local_participant.publish_data(
+        payload=json.dumps({
+            "track_id": tts_track.sid,
+            "identity": ctx.room.local_participant.identity,
+        }).encode('utf-8'),
+        reliable=True,
+        topic="agent_info"
+    )
     print(f"[TTS Agent] TTS audio track published, muted: {pub.muted}, name: {tts_track.name}, sid: {tts_track.sid}, participant: {ctx.room.local_participant.identity}")
 
     async def send_audio(audio_stream: AsyncIterable[SynthesizedAudio]):
         nonlocal tts_stream_closed, task
 
         total_duration = 0.0
+        first_frame = True
         async for a in audio_stream:
+
+            # Send TTS begin signal on the first frame
+            if first_frame:
+                await ctx.room.local_participant.publish_data(
+                    payload=b'',
+                    reliable=True,
+                    topic="tts_start"
+                )
+                first_frame = False
+
+                print("[TTS Agent] Sent tts_start signal.")
+
             # DEBUG: Check if audio frame has actual audio data
             frame_data = a.frame.data.tobytes()
             audio_array = np.frombuffer(frame_data, dtype=np.int16)
@@ -172,7 +194,7 @@ async def entrypoint(ctx: agents.JobContext):
             sentence = f"<s>{sentence}</s>"
             tts_stream.push_text(sentence)
 
-            print(f"[TTS-Agent] sending sentence: {sentence}")
+            print(f"[TTS-Agent]: {sentence}")
 
         elif data.topic == "chat_text_end":
             sentence = data.data.decode('utf-8')
@@ -180,7 +202,7 @@ async def entrypoint(ctx: agents.JobContext):
             tts_stream.push_text(sentence)
             tts_stream.end_input()
 
-            print(f"[TTS-Agent] sending sentence: {sentence}")
+            print(f"[TTS-Agent]: {sentence}")
             print(f"[TTS-Agent] end of message")
         
         elif data.topic == "stop_response":

@@ -259,11 +259,11 @@
 					on:submit={(e) => {
 						dispatch('submit', e.detail);
 					}}
-					on:startLivekitAsr={() => {
-						dispatch('startLivekitAsr');
+					on:startLivekit={() => {
+						dispatch('startLivekit');
 					}}
-					on:stopLivekitAsr={() => {
-						dispatch('stopLivekitAsr');
+					on:stopLivekit={() => {
+						dispatch('stopLivekit');
 					}}
 				/>
 			</div>
