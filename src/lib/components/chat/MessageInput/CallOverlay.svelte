@@ -486,12 +486,6 @@
             audioElement.pause();
             audioElement.currentTime = 0;
         }
-
-        if (audioContext) {
-            await audioContext.close();
-            audioContext = null;
-        }
-        nextStartTime = 0;
     };
 
     let audioAbortController = new AbortController();
@@ -686,7 +680,6 @@
         lkAutoSubmitTimeout = setTimeout(() => {
             console.log('[CallOverlay] 📤 Auto-submitting prompt');
             submitPrompt(userPrompt);
-            lkAutoSubmitTimeout = null;
             lkThinking = true;
         }, LIVEKIT_AUTO_SUBMIT_DELAY);
     };

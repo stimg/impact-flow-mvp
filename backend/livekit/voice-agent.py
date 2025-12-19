@@ -136,11 +136,11 @@ async def entrypoint(ctx: agents.JobContext):
 
             # Send TTS begin signal on the first frame
             if first_frame:
-                await ctx.room.local_participant.publish_data(
+                asyncio.create_task(ctx.room.local_participant.publish_data(
                     payload=b'',
                     reliable=True,
                     topic="tts_start"
-                )
+                ))
                 first_frame = False
 
                 print("[TTS Agent] Sent tts_start signal.")
