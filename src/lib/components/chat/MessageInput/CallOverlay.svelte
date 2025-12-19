@@ -15,6 +15,8 @@
     import { KokoroWorker } from '$lib/workers/KokoroWorker';
     import { ConnectionState } from 'livekit-client';
 
+    import Markdown from '$lib/components/chat/Messages/Markdown.svelte';
+
     const i18n = getContext('i18n');
 
     export let eventTarget: EventTarget;
@@ -1031,21 +1033,27 @@
                                     </svg>
                                 {/if}
                             </div>
-                            <div id="callOverlayChatHistory" class="flex-[3] min-h-0 w-full text-left overflow-hidden flex flex-col">
+                            <div id="callOverlayChatHistory" class="flex-[3] min-h-0 w-full text-left overflow-hidden flex flex-col mx-2 mb-3">
                                 {#if userPrompt}
                                     <div class="flex justify-end mb-3 shrink-0">
-                                        <div class="bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg px-2 py-2 max-w-[85%] text-sm">
+                                        <div class="bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg p-2 mx-2 max-w-[85%]">
                                             {userPrompt}
                                         </div>
                                     </div>
                                 {/if}
                                 {#if assistantResponse}
-                                    <div class="flex-1 min-h-0 overflow-y-auto touch-pan-y overscroll-contain mb-2">
-                                        <div class="text-sm font-bold mb-2 py-1">
+                                    <div class="flex-1 min-h-0 mx-2 overflow-y-auto touch-pan-y overscroll-contain mb-2 scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-700 scrollbar-track-transparent scrollbar-thin">
+                                        <div class="font-bold">
                                             {model.name}
                                         </div>
-                                        <div class="markdown-prose-sm">
-                                            {assistantResponse}
+                                        <div class="markdown-prose w-full">
+                                            <Markdown
+                                                id={currentMessageId}
+                                                content={assistantResponse}
+                                                {model}
+                                                save={false}
+                                                preview={false}
+                                            />
                                         </div>
                                     </div>
                                 {/if}

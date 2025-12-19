@@ -424,7 +424,6 @@
 	let lkAgentInfo: object | null = null;
 	let lkMicStream: MediaStream | null = null;
 	let lkMicLevel = 0;
-	let livekitAudioElement: HTMLAudioElement;
 	const setLkMicLevel = (level: number) => (lkMicLevel = level);
 
 	const processMicLevel = () => {
@@ -587,11 +586,20 @@
 			// Cleanup when unsubscribed
 			lkRoom.on(RoomEvent.TrackUnsubscribed, (track) => {
 				if (track.kind === Track.Kind.Audio) {
-					if (livekitAudioElement) {
-						track.detach(livekitAudioElement);
-						console.log('[Chat] Detached audio track');
-					}
-				}
+                    const audioEl = track.attach();
+                    audioEl.autoplay = true;
+                    audioEl.muted = false;
+                    // Safari quirk
+                    audioEl.setAttribute("playsinline", "");
+                    // Hide the audio element from view
+                    audioEl.style.position = "absolute";
+                    audioEl.style.width = "0";
+                    audioEl.style.height = "0";
+                    audioEl.style.opacity = "0";
+                    audioEl.style.pointerEvents = "none";
+
+                    document.body.appendChild(audioEl);
+                }
 			});
 
 			const p = lkRoom.localParticipant;
@@ -2237,7 +2245,6 @@
 </svelte:head>
 
 <audio id="audioElement" src="" style="display: none;" />
-<audio bind:this={livekitAudioElement} hidden autoplay playsinline />
 
 <EventConfirmDialog
 	bind:show={showEventConfirmation}
