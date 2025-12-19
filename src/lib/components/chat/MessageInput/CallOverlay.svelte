@@ -690,7 +690,8 @@
     }
 
     const ttsCompleteHandler = () => {
-        assistantSpeaking = false;
+        // Set 1 sec timeout for buffered audio to finish
+        setTimeout(() => (assistantSpeaking = false), 1000);
     }
 
     onMount(async () => {

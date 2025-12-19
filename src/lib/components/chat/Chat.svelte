@@ -1543,7 +1543,7 @@
 					detail: {
 						id: message.id,
 						topic: 'chat_text_end',
-						content: message.content
+						content: lastMessageContentPart
 					}
 				})
 			);
