@@ -455,8 +455,8 @@
 	};
 
 	const sendText = async (e) => {
-		const { content, topic } = e.detail;
-		await lkRoom!.localParticipant.publishData(new TextEncoder().encode(content), {
+		const { content, topic, last_sentence } = e.detail;
+		await lkRoom!.localParticipant.publishData(new TextEncoder().encode(last_sentence || content), {
 			reliable: true,
 			topic
 		});
@@ -1543,7 +1543,8 @@
 					detail: {
 						id: message.id,
 						topic: 'chat_text_end',
-						content: lastMessageContentPart
+                        content,
+						last_sentence: lastMessageContentPart,
 					}
 				})
 			);

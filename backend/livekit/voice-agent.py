@@ -149,16 +149,16 @@ async def entrypoint(ctx: agents.JobContext):
                 print("[TTS Agent] Sent tts_start signal.")
 
             # DEBUG: Check if audio frame has actual audio data
-            frame_data = a.frame.data.tobytes()
-            audio_array = np.frombuffer(frame_data, dtype=np.int16)
-            audio_min = audio_array.min()
-            audio_max = audio_array.max()
-            audio_avg_abs = np.abs(audio_array).mean()
+            # frame_data = a.frame.data.tobytes()
+            # audio_array = np.frombuffer(frame_data, dtype=np.int16)
+            # audio_min = audio_array.min()
+            # audio_max = audio_array.max()
+            # audio_avg_abs = np.abs(audio_array).mean()
 
-            duration_ms = (len(audio_array) / a.frame.num_channels) / (a.frame.sample_rate / 1000.0)
-            total_duration += duration_ms
+            # duration_ms = (len(audio_array) / a.frame.num_channels) / (a.frame.sample_rate / 1000.0)
+            # total_duration += duration_ms
 
-            print(f"[TTS Agent] audio frame sent: {a.frame}, duration={duration_ms:.2f}ms, total={total_duration/1000.0:.2f}s, min={audio_min}, max={audio_max}, avg_abs={audio_avg_abs:.2f}")
+            # print(f"[TTS Agent] audio frame sent: {a.frame}, duration={duration_ms:.2f}ms, total={total_duration/1000.0:.2f}s, min={audio_min}, max={audio_max}, avg_abs={audio_avg_abs:.2f}")
 
             await audio_source.capture_frame(a.frame)
 
@@ -215,7 +215,7 @@ async def entrypoint(ctx: agents.JobContext):
             sentence = f"<s>{sentence}</s>"
             chunked_stream = tts.synthesize(sentence)
             tts_queue.put_nowait(chunked_stream)
-            print(f"[TTS-Agent] Queued: {sentence}")
+            # print(f"[TTS-Agent] Queued: {sentence}")
 
         elif data.topic == "chat_text_end":
             sentence = data.data.decode('utf-8')
@@ -223,9 +223,9 @@ async def entrypoint(ctx: agents.JobContext):
                 sentence = f"<s>{sentence}</s>"
                 chunked_stream = tts.synthesize(sentence)
                 tts_queue.put_nowait(chunked_stream)
-                print(f"[TTS-Agent] Queued (end): {sentence}")
+                # print(f"[TTS-Agent] Queued (end): {sentence}")
 
-            print(f"[TTS-Agent] end of message")
+            # print(f"[TTS-Agent] end of message")
 
         elif data.topic == "stop_response":
             asyncio.create_task(handle_stop_signal())

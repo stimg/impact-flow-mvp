@@ -50,6 +50,7 @@
     let selectedVideoInputDeviceId = null;
 
     let userPrompt = '';
+    let assistantResponse = '';
     let lkAutoSubmitTimeout = null;
     let lkThinking = false;
     // let lkAudioLevel = 0;
@@ -608,6 +609,7 @@
         const { id } = e.detail;
 
         chatStreaming = true;
+        assistantResponse = '';
 
         if (currentMessageId !== id) {
             console.log(`Received chat start event for message ID ${id}`);
@@ -631,20 +633,24 @@
         // "content" here is a sentence from the assistant,
         // there will be many sentences for the same "id"
 
-        if (currentMessageId === id) {
-            try {
-                if (messages[id] === undefined) {
-                    messages[id] = [content];
-                } else {
-                    messages[id].push(content);
-                }
+        // Initialize currentMessageId if not set (first event) or if new message
+        if (currentMessageId === null || currentMessageId !== id) {
+            currentMessageId = id;
+            assistantResponse = '';
+        }
 
-                console.log(content);
-
-                fetchAudio(content);
-            } catch (error) {
-                console.error('Failed to fetch or play audio:', error);
+        try {
+            if (messages[id] === undefined) {
+                messages[id] = [content];
+            } else {
+                messages[id].push(content);
             }
+
+            console.log(content);
+
+            fetchAudio(content);
+        } catch (error) {
+            console.error('Failed to fetch or play audio:', error);
         }
     };
 
@@ -652,6 +658,7 @@
         const { id, content } = e.detail;
         // "content" here is the entire message from the assistant
         finishedMessages[id] = true;
+        assistantResponse = content;
 
         chatStreaming = false;
     };
@@ -679,6 +686,7 @@
         // Set new timeout for auto-submit after delay
         lkAutoSubmitTimeout = setTimeout(() => {
             console.log('[CallOverlay] 📤 Auto-submitting prompt');
+            assistantResponse = '';
             submitPrompt(userPrompt);
             lkThinking = true;
         }, LIVEKIT_AUTO_SUBMIT_DELAY);
@@ -739,8 +747,9 @@
             // Use default audio processing when LiveKit is disabled
             eventTarget.addEventListener('chat:start', chatStartHandler);
             eventTarget.addEventListener('chat', chatEventHandler);
-            eventTarget.addEventListener('chat:finish', chatFinishHandler);
         }
+
+        eventTarget.addEventListener('chat:finish', chatFinishHandler);
 
         return async () => {
             await stopAllAudio();
@@ -759,9 +768,10 @@
                 dispatch('stopLivekit');
             } else {
                 eventTarget.removeEventListener('chat:start', chatStartHandler);
-                eventTarget.removeEventListener('chat', chatEventHandler);
-                eventTarget.removeEventListener('chat:finish', chatFinishHandler);
             }
+
+            eventTarget.removeEventListener('chat', chatEventHandler);
+            eventTarget.removeEventListener('chat:finish', chatFinishHandler);
 
             audioAbortController.abort();
             await tick();
@@ -799,9 +809,10 @@
             dispatch('stopLivekit');
         } else {
             eventTarget.removeEventListener('chat:start', chatStartHandler);
-            eventTarget.removeEventListener('chat', chatEventHandler);
-            eventTarget.removeEventListener('chat:finish', chatFinishHandler);
         }
+
+        eventTarget.removeEventListener('chat', chatEventHandler);
+        eventTarget.removeEventListener('chat:finish', chatFinishHandler);
 
         audioAbortController.abort();
 
@@ -926,7 +937,7 @@
             </button>
         {/if}
 
-        <div class="flex justify-center items-center flex-1 h-full w-full max-h-full">
+        <div class="flex justify-center items-center flex-1 min-h-0 w-full overflow-hidden">
             {#if !camera}
                 <button
                         class="w-full h-full flex flex-col items-center justify-center outline-none"
@@ -938,7 +949,7 @@
 					}}
                 >
                     {#if LIVEKIT_ENABLED}
-                        <div id="callOverlayMain" class="flex flex-col h-full w-full">
+                        <div id="callOverlayMain" class="flex flex-col h-full w-full min-h-0 overflow-hidden">
                             <div class="flex-[1] flex items-center justify-center">
                                 {#if lkThinking}
                                     <svg width="100%"
@@ -1020,8 +1031,24 @@
                                     </svg>
                                 {/if}
                             </div>
-                            <div id="callOverlayChatHistory" class="flex-[3] w-full text-left overflow-y-auto px-4">
-                                {userPrompt}
+                            <div id="callOverlayChatHistory" class="flex-[3] min-h-0 w-full text-left overflow-hidden flex flex-col">
+                                {#if userPrompt}
+                                    <div class="flex justify-end mb-3 shrink-0">
+                                        <div class="bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg px-2 py-2 max-w-[85%] text-sm">
+                                            {userPrompt}
+                                        </div>
+                                    </div>
+                                {/if}
+                                {#if assistantResponse}
+                                    <div class="flex-1 min-h-0 overflow-y-auto touch-pan-y overscroll-contain mb-2">
+                                        <div class="text-sm font-bold mb-2 py-1">
+                                            {model.name}
+                                        </div>
+                                        <div class="markdown-prose-sm">
+                                            {assistantResponse}
+                                        </div>
+                                    </div>
+                                {/if}
                             </div>
                         </div>
                     {:else if emoji}
@@ -1128,7 +1155,7 @@
             {/if}
         </div>
 
-        <div class="flex justify-between items-center pb-2 w-full">
+        <div class="flex justify-between items-center pb-2 w-full shrink-0">
             {#if !LIVEKIT_ENABLED}
                 <div>
                     {#if camera}

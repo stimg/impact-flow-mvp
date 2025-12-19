@@ -14,6 +14,11 @@ ENV PYTHONUNBUFFERED=1
 # Disable pip version check to speed up builds
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 
+# Elevenlabs settings
+ENV ELEVEN_VOICE_ID=ogdlaxy0T9rCSVdH0VJM
+ENV ELEVEN_TTS_MODEL=eleven_flash_v2_5
+ENV ELEVEN_TTS_LANG=de
+
 # Create a non-privileged user that the app will run under.
 # See https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#user
 ARG UID=10001
