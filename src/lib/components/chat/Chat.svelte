@@ -576,7 +576,8 @@
                 if (track.kind === Track.Kind.Audio) {
                     const audioEl = track.attach();
                     audioEl.autoplay = true;
-                    audioEl.controls = true;
+                    audioEl.controls = false;
+					audioEl.style.display = 'none';
                     document.body.appendChild(audioEl);
 
                     console.log("[Chat] Attached audio for participant: ", participant.identity);
