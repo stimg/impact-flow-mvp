@@ -46,6 +46,13 @@ async def entrypoint(ctx: agents.JobContext):
             num_channels=1
         )
 
+        print(f"[STT Agent] Stream ready. Notifying frontend...")
+        await ctx.room.local_participant.publish_data(
+            "listening".encode('utf-8'),
+            topic="system",
+            reliable=True
+        )
+
         async with asyncio.TaskGroup() as tg:
             # Create task for processing STT stream
             stt_task = tg.create_task(process_stt_stream(stt_stream))

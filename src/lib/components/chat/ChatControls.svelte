@@ -35,6 +35,7 @@
 
     export let lkConnectionState: ConnectionState | null = ConnectionState.Disconnected;
     export let lkMicLevel: number;
+    export let lkAudioPublished = false;
 
 	let mediaQuery;
 	let largeScreen = false;
@@ -168,6 +169,7 @@
 								{eventTarget}
                                 {lkConnectionState}
                                 {lkMicLevel}
+                                {lkAudioPublished}
                                 on:startLivekit={() => dispatch('startLivekit')}
                                 on:stopLivekit={() => dispatch('stopLivekit')}
                                 on:stopAudioStream={() => dispatch('stopAudioStream')}
@@ -252,6 +254,7 @@
 									{eventTarget}
                                     {lkConnectionState}
                                     {lkMicLevel}
+                                    {lkAudioPublished}
                                     on:startLivekit={() => dispatch('startLivekit')}
                                     on:stopLivekit={() => dispatch('stopLivekit')}
                                     on:stopAudioStream={() => dispatch('stopAudioStream')}

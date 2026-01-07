@@ -421,8 +421,10 @@
 	let lkRoom: Room | null = null;
 	let lkRoomName = '';
 	let lkConnectionState: ConnectionState = ConnectionState.Disconnected;
+	let lkAudioPublished = false;
 	let lkAgentInfo: object | null = null;
 	let lkMicStream: MediaStream | null = null;
+	let lkAudioElement: HTMLAudioElement | null = null;
 	let lkMicLevel = 0;
 	const setLkMicLevel = (level: number) => (lkMicLevel = level);
 
@@ -471,6 +473,7 @@
 		try {
 			prompt = $i18n.t('Connecting...');
 			lkConnectionState = ConnectionState.Connecting;
+			lkAudioPublished = false;
 			// Ask for permission first (so device labels appear)
 			await navigator.mediaDevices.getUserMedia({ audio: true });
 
@@ -532,6 +535,7 @@
 					serverRoomName: lkRoom.name,
 					myIdentity: lkRoom.localParticipant.identity
 				});
+				lkAudioPublished = false;
 			});
 
 			lkRoom.on(RoomEvent.DataReceived, (payload: Uint8Array, participant, kind, topic) => {
@@ -544,10 +548,16 @@
 						prompt = '';
 					} else if (text === 'send') {
 						submitPrompt(prompt);
+					} else if (text === 'listening') {
+						console.log('[Chat] Backend is listening');
+						lkAudioPublished = true;
 					}
 				} else if (topic === 'transcript') {
 					console.log('[Chat] Transcribed prompt: ', text);
 					prompt = text;
+
+					// Resume to playback
+					lkAudioElement?.play();
 
 					// Dispatch event with the transcript text
 					eventTarget.dispatchEvent(
@@ -574,11 +584,12 @@
             // Play new tracks as they are subscribed
             lkRoom.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
                 if (track.kind === Track.Kind.Audio) {
-                    const audioEl = track.attach();
-                    audioEl.autoplay = true;
-                    audioEl.controls = false;
-					audioEl.style.display = 'none';
-                    document.body.appendChild(audioEl);
+					lkAudioElement = track.attach();
+					lkAudioElement.autoplay = true;
+					lkAudioElement.controls = false;
+					lkAudioElement.muted = false;
+					lkAudioElement.style.display = 'none';
+                    document.body.appendChild(lkAudioElement);
 
                     console.log("[Chat] Attached audio for participant: ", participant.identity);
                 }
@@ -586,20 +597,9 @@
 
 			// Cleanup when unsubscribed
 			lkRoom.on(RoomEvent.TrackUnsubscribed, (track) => {
-				if (track.kind === Track.Kind.Audio) {
-                    const audioEl = track.attach();
-                    audioEl.autoplay = true;
-                    audioEl.muted = false;
-                    // Safari quirk
-                    audioEl.setAttribute("playsinline", "");
-                    // Hide the audio element from view
-                    audioEl.style.position = "absolute";
-                    audioEl.style.width = "0";
-                    audioEl.style.height = "0";
-                    audioEl.style.opacity = "0";
-                    audioEl.style.pointerEvents = "none";
-
-                    document.body.appendChild(audioEl);
+				if (track.kind === Track.Kind.Audio && lkAudioElement instanceof HTMLAudioElement) {
+                    document.body.removeChild(lkAudioElement);
+					lkAudioElement = null;
                 }
 			});
 
@@ -628,6 +628,7 @@
 				}
 			}
 			lkRoom = null;
+			lkAudioPublished = false;
 
 			if (lkMicStream) {
 				lkMicStream.getTracks().forEach((track) => track.stop());
@@ -647,9 +648,9 @@
 	const stopAudioStream = async () => {
 		console.log('[Chat] Got stop response signal. Stopping audio stream...');
 		if (lkConnectionState === ConnectionState.Connected && lkRoom) {
-			if (livekitAudioElement) {
-				livekitAudioElement.pause();
-				livekitAudioElement.currentTime = 0;
+			if (lkAudioElement) {
+				lkAudioElement.pause();
+				lkAudioElement.currentTime = 0;
 			}
 			try {
 				const payload = new TextEncoder().encode('stop_response');
@@ -2482,6 +2483,7 @@
 					{eventTarget}
 					{lkConnectionState}
 					{lkMicLevel}
+					{lkAudioPublished}
 					on:startLivekit={() => {
 						startLivekit();
 					}}
