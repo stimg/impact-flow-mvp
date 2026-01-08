@@ -456,8 +456,10 @@
 	};
 
 	const sendText = async (e) => {
+		if (!lkRoom) return;
+
 		const { content, topic, last_sentence } = e.detail;
-		await lkRoom!.localParticipant.publishData(new TextEncoder().encode(last_sentence || content), {
+		await lkRoom.localParticipant.publishData(new TextEncoder().encode(last_sentence || content), {
 			reliable: true,
 			topic
 		});
@@ -527,7 +529,6 @@
 				console.log(
 					`[Chat] connected: room: ${lkRoom.name}, identity: ${lkRoom.localParticipant.identity}`
 				);
-				toast.success($i18n.t('Listening...'));
 			});
 
 			lkRoom.on(RoomEvent.Disconnected, () => {
@@ -550,7 +551,12 @@
 						submitPrompt(prompt);
 					} else if (text === 'listening') {
 						console.log('[Chat] Backend is listening');
-						lkAudioPublished = true;
+
+						// Workaround for BT devices
+						setTimeout(() => {
+							lkAudioPublished = true;
+							toast.success($i18n.t('Listening...'));
+						}, 2000);
 					}
 				} else if (topic === 'transcript') {
 					console.log('[Chat] Transcribed prompt: ', text);
@@ -2362,6 +2368,7 @@
 									{stopResponse}
 									{createMessagePair}
 									{lkConnectionState}
+									{lkAudioPublished}
 									{lkMicLevel}
 									onChange={(input) => {
 										if (!$temporaryChatEnabled) {
@@ -2426,7 +2433,7 @@
 									bind:atSelectedModel
 									transparentBackground={$settings?.backgroundImageUrl ?? false}
 									toolServers={$toolServers}
-									{lkConnectionState}
+									{lkAudioPublished}
 									{lkMicLevel}
 									{stopResponse}
 									{createMessagePair}

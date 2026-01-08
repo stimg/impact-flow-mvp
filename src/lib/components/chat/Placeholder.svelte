@@ -48,7 +48,8 @@
 
 	export let toolServers = [];
 
-    export let lkConnectionState: ConnectionState;
+	export let lkConnectionState: ConnectionState;
+    export let lkAudioPublished;
     export let lkMicLevel: number;
 
 	let models = [];
@@ -240,6 +241,7 @@
 					{toolServers}
 					{transparentBackground}
 					{lkConnectionState}
+					{lkAudioPublished}
 					{lkMicLevel}
 					{stopResponse}
 					{createMessagePair}

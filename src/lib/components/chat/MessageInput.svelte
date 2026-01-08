@@ -101,6 +101,7 @@
 	export let codeInterpreterEnabled = false;
 
 	export let lkConnectionState: ConnectionState;
+	export let lkAudioPublished: boolean;
 	export let lkMicLevel: number;
 
 	$: onChange({
@@ -1460,7 +1461,7 @@
 													aria-label="Voice Input"
 												>
 													{#if LIVEKIT_ENABLED}
-														{#if lkConnectionState === ConnectionState.Connecting}
+														{#if lkConnectionState === ConnectionState.Connecting || (lkConnectionState === ConnectionState.Connected && !lkAudioPublished)}
 															<!-- Mic icon yellow -->
 															<svg
 																xmlns="http://www.w3.org/2000/svg"

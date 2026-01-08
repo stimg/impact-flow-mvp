@@ -27,8 +27,8 @@
     export let modelId;
 
     export let lkConnectionState: ConnectionState | null = ConnectionState.Disconnected;
-    export let lkMicLevel: number;
     export let lkAudioPublished = false;
+    export let lkMicLevel: number;
 
     let wakeLock = null;
 
@@ -998,7 +998,7 @@
                                             />
                                         {/each}
                                     </svg>
-                                {:else if lkConnectionState == ConnectionState.Connecting}
+                                {:else if lkConnectionState === ConnectionState.Connecting || (lkConnectionState === ConnectionState.Connected && !lkAudioPublished)}
                                     <svg
                                             xmlns="http://www.w3.org/2000/svg"
                                             viewBox="0 0 24 24"
@@ -1009,7 +1009,7 @@
                                                 d="m12.707,12.707l-2.293,2.293-1.414-1.414,2.293-2.293c.391-.391.391-1.023,0-1.414s-1.023-.391-1.414,0l-2.293,2.293-1.879-1.879c-.391-.391-1.023-.391-1.414,0s-.391,1.023,0,1.414l.352.352-1.134,1.135c-1.77,1.769-1.982,4.515-.638,6.519l-2.58,2.58c-.391.391-.391,1.023,0,1.414.195.195.451.293.707.293s.512-.098.707-.293l2.58-2.58c.865.58,1.868.871,2.871.871,1.321,0,2.642-.503,3.647-1.509l1.135-1.134.352.352c.195.195.451.293.707.293s.512-.098.707-.293c.391-.391.391-1.023,0-1.414l-1.879-1.879,2.293-2.293c.391-.391.391-1.023,0-1.414s-1.023-.391-1.414,0ZM23.707.293c-.391-.391-1.023-.391-1.414,0l-2.58,2.58c-2.004-1.344-4.749-1.132-6.519.638l-1.135,1.135-.353-.353c-.391-.391-1.023-.391-1.414,0s-.391,1.023,0,1.414l8,8c.195.195.451.293.707.293s.512-.098.707-.293c.391-.391.391-1.023,0-1.414l-.353-.353,1.135-1.135c1.77-1.769,1.982-4.515.638-6.519l2.58-2.58c.391-.391.391-1.023,0-1.414Z"
                                         />
                                     </svg>
-                                {:else if lkConnectionState == ConnectionState.Connected}
+                                {:else if lkConnectionState === ConnectionState.Connected}
                                     <svg
                                             xmlns="http://www.w3.org/2000/svg"
                                             viewBox="0 0 20 20"
@@ -1021,7 +1021,7 @@
                                                 d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z"
                                         ></path>
                                     </svg>
-                                {:else if lkConnectionState == ConnectionState.Disconnected}
+                                {:else if lkConnectionState === ConnectionState.Disconnected}
                                     <svg
                                             xmlns="http://www.w3.org/2000/svg"
                                             viewBox="0 0 24 24"
@@ -1240,7 +1240,7 @@
 						}
 					}}
                 >
-                    {#if LIVEKIT_ENABLED && lkConnectionState === ConnectionState.Connected && !assistantSpeaking && !lkThinking}
+                    {#if LIVEKIT_ENABLED && lkConnectionState === ConnectionState.Connected && lkAudioPublished && !assistantSpeaking && !lkThinking}
                         <!-- Audio Level Meter (horizontal) -->
                         <div class="flex items-center justify-center gap-0.5 px-2">
                             <svg
@@ -1285,21 +1285,7 @@
                                         </svg>
                                         {$i18n.t('Disconnected')}
                                     </div>
-                                {:else if lkConnectionState === ConnectionState.Connecting}
-                                    <div class="flex items-center gap-2 w-full">
-                                        <svg
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                viewBox="0 0 24 24"
-                                                fill="currentColor"
-                                                class="w-5 h-5 translate-y-[0.5px] text-amber-500"
-                                        >
-                                            <path
-                                                    d="m12.707,12.707l-2.293,2.293-1.414-1.414,2.293-2.293c.391-.391.391-1.023,0-1.414s-1.023-.391-1.414,0l-2.293,2.293-1.879-1.879c-.391-.391-1.023-.391-1.414,0s-.391,1.023,0,1.414l.352.352-1.134,1.135c-1.77,1.769-1.982,4.515-.638,6.519l-2.58,2.58c-.391.391-.391,1.023,0,1.414.195.195.451.293.707.293s.512-.098.707-.293l2.58-2.58c.865.58,1.868.871,2.871.871,1.321,0,2.642-.503,3.647-1.509l1.135-1.134.352.352c.195.195.451.293.707.293s.512-.098.707-.293c.391-.391.391-1.023,0-1.414l-1.879-1.879,2.293-2.293c.391-.391.391-1.023,0-1.414s-1.023-.391-1.414,0ZM23.707.293c-.391-.391-1.023-.391-1.414,0l-2.58,2.58c-2.004-1.344-4.749-1.132-6.519.638l-1.135,1.135-.353-.353c-.391-.391-1.023-.391-1.414,0s-.391,1.023,0,1.414l8,8c.195.195.451.293.707.293s.512-.098.707-.293c.391-.391.391-1.023,0-1.414l-.353-.353,1.135-1.135c1.77-1.769,1.982-4.515.638-6.519l2.58-2.58c.391-.391.391-1.023,0-1.414Z"
-                                            />
-                                        </svg>
-                                        {$i18n.t('Connecting...')}
-                                    </div>
-                                {:else if lkConnectionState === ConnectionState.Connected && !lkAudioPublished}
+                                {:else if lkConnectionState === ConnectionState.Connecting || (lkConnectionState === ConnectionState.Connected && !lkAudioPublished)}
                                     <div class="flex items-center gap-2 w-full">
                                         <svg
                                                 xmlns="http://www.w3.org/2000/svg"
